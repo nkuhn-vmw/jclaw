@@ -3,8 +3,14 @@ spring:
     active: cloud
   datasource:
     # Auto-configured by java-cfenv from VCAP_SERVICES postgres binding
-  redis:
-    # Auto-configured by java-cfenv from VCAP_SERVICES redis binding
+  data:
+    redis:
+      # Auto-configured by java-cfenv from VCAP_SERVICES redis binding
   security:
     oauth2:
       # Auto-configured by java-cfenv-boot-pivotal-sso from VCAP_SERVICES p-identity binding
+      # The p-identity service binding provides: issuer-uri, client-id, client-secret, jwk-set-uri
+      resourceserver:
+        jwt:
+          # Issuer URI auto-configured from p-identity VCAP_SERVICES binding
+          # jwk-set-uri auto-configured from p-identity VCAP_SERVICES binding

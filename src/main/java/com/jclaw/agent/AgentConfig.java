@@ -1,5 +1,6 @@
 package com.jclaw.agent;
 
+import com.jclaw.content.ContentFilterPolicy;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.HashSet;
@@ -26,14 +27,23 @@ public class AgentConfig {
     @Column(name = "system_prompt", length = 100000)
     private String systemPrompt;
 
-    @Column(name = "allowed_tools")
-    private String[] allowedTools;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "agent_allowed_tools",
+            joinColumns = @JoinColumn(name = "agent_id"))
+    @Column(name = "tool_name")
+    private Set<String> allowedTools = new HashSet<>();
 
-    @Column(name = "denied_tools")
-    private String[] deniedTools;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "agent_denied_tools",
+            joinColumns = @JoinColumn(name = "agent_id"))
+    @Column(name = "tool_name")
+    private Set<String> deniedTools = new HashSet<>();
 
-    @Column(name = "egress_allowlist")
-    private String[] egressAllowlist;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "agent_egress_allowlist",
+            joinColumns = @JoinColumn(name = "agent_id"))
+    @Column(name = "pattern")
+    private Set<String> egressAllowlist = new HashSet<>();
 
     @Column(name = "max_tokens_per_request")
     private int maxTokensPerRequest = 4096;
@@ -43,6 +53,9 @@ public class AgentConfig {
 
     @Column(name = "max_history_tokens")
     private int maxHistoryTokens = 128000;
+
+    @Embedded
+    private ContentFilterPolicy contentFilterPolicy = new ContentFilterPolicy();
 
     @Column(name = "config_json", length = 10000)
     private String configJson = "{}";
@@ -75,14 +88,14 @@ public class AgentConfig {
     public String getSystemPrompt() { return systemPrompt; }
     public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
 
-    public String[] getAllowedTools() { return allowedTools; }
-    public void setAllowedTools(String[] allowedTools) { this.allowedTools = allowedTools; }
+    public Set<String> getAllowedTools() { return allowedTools; }
+    public void setAllowedTools(Set<String> allowedTools) { this.allowedTools = allowedTools; }
 
-    public String[] getDeniedTools() { return deniedTools; }
-    public void setDeniedTools(String[] deniedTools) { this.deniedTools = deniedTools; }
+    public Set<String> getDeniedTools() { return deniedTools; }
+    public void setDeniedTools(Set<String> deniedTools) { this.deniedTools = deniedTools; }
 
-    public String[] getEgressAllowlist() { return egressAllowlist; }
-    public void setEgressAllowlist(String[] egressAllowlist) { this.egressAllowlist = egressAllowlist; }
+    public Set<String> getEgressAllowlist() { return egressAllowlist; }
+    public void setEgressAllowlist(Set<String> egressAllowlist) { this.egressAllowlist = egressAllowlist; }
 
     public int getMaxTokensPerRequest() { return maxTokensPerRequest; }
     public void setMaxTokensPerRequest(int maxTokensPerRequest) { this.maxTokensPerRequest = maxTokensPerRequest; }
@@ -93,6 +106,9 @@ public class AgentConfig {
     public int getMaxHistoryTokens() { return maxHistoryTokens; }
     public void setMaxHistoryTokens(int maxHistoryTokens) { this.maxHistoryTokens = maxHistoryTokens; }
 
+    public ContentFilterPolicy getContentFilterPolicy() { return contentFilterPolicy; }
+    public void setContentFilterPolicy(ContentFilterPolicy contentFilterPolicy) { this.contentFilterPolicy = contentFilterPolicy; }
+
     public String getConfigJson() { return configJson; }
     public void setConfigJson(String configJson) { this.configJson = configJson; }
 
@@ -102,15 +118,8 @@ public class AgentConfig {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 
     public boolean isToolAllowed(String toolName) {
-        if (deniedTools != null) {
-            for (String denied : deniedTools) {
-                if (denied.equals(toolName)) return false;
-            }
-        }
-        if (allowedTools == null || allowedTools.length == 0) return true;
-        for (String allowed : allowedTools) {
-            if (allowed.equals(toolName)) return true;
-        }
-        return false;
+        if (deniedTools != null && deniedTools.contains(toolName)) return false;
+        if (allowedTools == null || allowedTools.isEmpty()) return true;
+        return allowedTools.contains(toolName);
     }
 }

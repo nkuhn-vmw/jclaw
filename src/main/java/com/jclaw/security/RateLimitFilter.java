@@ -8,6 +8,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -15,13 +17,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.time.Duration;
+import java.util.List;
 
 /**
  * Per-user rate limiting with per-minute and per-hour caps.
- * In production with Redis, replace with Bucket4j Redis-backed buckets.
+ * Uses Redis for distributed rate limiting across CF instances.
  */
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
@@ -33,14 +34,26 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final int SERVICE_LIMIT_PER_MINUTE = 60;
     private static final int SERVICE_LIMIT_PER_HOUR = 1000;
 
-    private final Map<String, RateBucket> minuteBuckets = new ConcurrentHashMap<>();
-    private final Map<String, RateBucket> hourBuckets = new ConcurrentHashMap<>();
-    private final Counter rateLimitExceeded;
+    // Lua script for atomic increment-and-check with TTL
+    private static final String RATE_LIMIT_SCRIPT = """
+            local current = redis.call('INCR', KEYS[1])
+            if current == 1 then
+                redis.call('PEXPIRE', KEYS[1], ARGV[1])
+            end
+            return current
+            """;
 
-    public RateLimitFilter(MeterRegistry meterRegistry) {
+    private final ReactiveStringRedisTemplate redisTemplate;
+    private final Counter rateLimitExceeded;
+    private final DefaultRedisScript<Long> rateLimitRedisScript;
+
+    public RateLimitFilter(ReactiveStringRedisTemplate redisTemplate,
+                           MeterRegistry meterRegistry) {
+        this.redisTemplate = redisTemplate;
         this.rateLimitExceeded = Counter.builder("jclaw.rate_limit.exceeded")
                 .description("Rate limit exceeded events")
                 .register(meterRegistry);
+        this.rateLimitRedisScript = new DefaultRedisScript<>(RATE_LIMIT_SCRIPT, Long.class);
     }
 
     @Override
@@ -63,25 +76,38 @@ public class RateLimitFilter extends OncePerRequestFilter {
         int minuteLimit = isService ? SERVICE_LIMIT_PER_MINUTE : USER_LIMIT_PER_MINUTE;
         int hourLimit = isService ? SERVICE_LIMIT_PER_HOUR : USER_LIMIT_PER_HOUR;
 
-        RateBucket minuteBucket = minuteBuckets.computeIfAbsent(key,
-                k -> new RateBucket(minuteLimit, 60_000));
-        RateBucket hourBucket = hourBuckets.computeIfAbsent(key,
-                k -> new RateBucket(hourLimit, 3_600_000));
-
-        if (!minuteBucket.tryConsume()) {
+        // Check per-minute limit via Redis
+        Long minuteCount = checkRateLimit("jclaw:rate:" + key + ":min", 60_000);
+        if (minuteCount != null && minuteCount > minuteLimit) {
             rejectRequest(response, key, "per-minute", 60);
             return;
         }
-        if (!hourBucket.tryConsume()) {
+
+        // Check per-hour limit via Redis
+        Long hourCount = checkRateLimit("jclaw:rate:" + key + ":hour", 3_600_000);
+        if (hourCount != null && hourCount > hourLimit) {
             rejectRequest(response, key, "per-hour", 3600);
             return;
         }
 
         response.setHeader("X-RateLimit-Remaining-Minute",
-                String.valueOf(minuteBucket.getRemaining()));
+                String.valueOf(Math.max(0, minuteLimit - (minuteCount != null ? minuteCount : 0))));
         response.setHeader("X-RateLimit-Remaining-Hour",
-                String.valueOf(hourBucket.getRemaining()));
+                String.valueOf(Math.max(0, hourLimit - (hourCount != null ? hourCount : 0))));
         filterChain.doFilter(request, response);
+    }
+
+    private Long checkRateLimit(String key, long windowMs) {
+        try {
+            return redisTemplate.execute(
+                    rateLimitRedisScript,
+                    List.of(key),
+                    List.of(String.valueOf(windowMs))
+            ).blockFirst(Duration.ofSeconds(1));
+        } catch (Exception e) {
+            log.warn("Redis rate limit check failed, allowing request: {}", e.getMessage());
+            return null; // fail open if Redis is unavailable
+        }
     }
 
     private void rejectRequest(HttpServletResponse response, String key,
@@ -109,30 +135,5 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(a -> a.equals("SCOPE_jclaw.service"));
-    }
-
-    private static class RateBucket {
-        private final int limit;
-        private final long windowMs;
-        private final AtomicInteger count = new AtomicInteger(0);
-        private volatile long windowStart = System.currentTimeMillis();
-
-        RateBucket(int limit, long windowMs) {
-            this.limit = limit;
-            this.windowMs = windowMs;
-        }
-
-        boolean tryConsume() {
-            long now = System.currentTimeMillis();
-            if (now - windowStart > windowMs) {
-                count.set(0);
-                windowStart = now;
-            }
-            return count.incrementAndGet() <= limit;
-        }
-
-        int getRemaining() {
-            return Math.max(0, limit - count.get());
-        }
     }
 }

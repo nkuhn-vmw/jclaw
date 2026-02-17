@@ -13,21 +13,42 @@ import org.springframework.web.util.ContentCachingRequestWrapper;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
+import java.security.*;
+import java.security.spec.NamedParameterSpec;
+import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import com.nimbusds.jose.proc.JWSVerificationKeySelector;
+import com.nimbusds.jose.proc.SecurityContext;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 
 /**
  * Authenticates inbound channel webhook requests using channel-specific
- * signature verification (e.g., Slack signing secret, Teams HMAC).
+ * signature verification (Slack HMAC-SHA256, Teams JWT, Google Chat JWT, Discord Ed25519).
  * Non-webhook requests pass through.
  */
 public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ChannelWebhookAuthFilter.class);
 
+    private static final String TEAMS_JWKS_URL = "https://login.botframework.com/v1/.well-known/keys";
+    private static final String GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
+    private static final String TEAMS_ISSUER = "https://api.botframework.com";
+    private static final String GOOGLE_ISSUER = "chat@system.gserviceaccount.com";
+
     private final SecretsConfig secretsConfig;
+    private final Map<String, CachedJwkSet> jwksCache = new ConcurrentHashMap<>();
 
     public ChannelWebhookAuthFilter(SecretsConfig secretsConfig) {
         this.secretsConfig = secretsConfig;
@@ -52,8 +73,8 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
 
         boolean verified = switch (channelType) {
             case "slack" -> verifySlackSignature(wrappedRequest, body);
-            case "teams" -> verifyTeamsToken(wrappedRequest);
-            case "google-chat" -> verifyGoogleChatToken(wrappedRequest);
+            case "teams" -> verifyTeamsJwt(wrappedRequest);
+            case "google-chat" -> verifyGoogleChatJwt(wrappedRequest);
             case "discord" -> verifyDiscordSignature(wrappedRequest, body);
             default -> {
                 log.warn("Unknown webhook channel type: {}", channelType);
@@ -100,39 +121,163 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
         return constantTimeEquals(signature, computed);
     }
 
-    private boolean verifyTeamsToken(HttpServletRequest request) {
+    /**
+     * Validates Teams Bot Framework JWT token against Microsoft's JWKS endpoint.
+     * Verifies signature, issuer (api.botframework.com), and expiry.
+     */
+    private boolean verifyTeamsJwt(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) return false;
-        // Teams Bot Framework uses JWT validation against Microsoft's keys.
-        // In production, validate the JWT token against Microsoft's JWKS endpoint.
-        // For now, verify the token is present and non-empty.
         String token = authHeader.substring(7);
-        return !token.isEmpty();
+        if (token.isEmpty()) return false;
+
+        try {
+            JWKSet jwkSet = fetchJwkSet(TEAMS_JWKS_URL);
+            DefaultJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
+            processor.setJWSKeySelector(new JWSVerificationKeySelector<>(
+                    JWSAlgorithm.RS256, new ImmutableJWKSet<>(jwkSet)));
+
+            JWTClaimsSet claims = processor.process(token, null);
+
+            // Verify issuer
+            String issuer = claims.getIssuer();
+            if (!TEAMS_ISSUER.equals(issuer)) {
+                log.warn("Teams JWT issuer mismatch: expected={} actual={}", TEAMS_ISSUER, issuer);
+                return false;
+            }
+
+            // Verify not expired
+            if (claims.getExpirationTime() != null
+                    && claims.getExpirationTime().before(new java.util.Date())) {
+                log.warn("Teams JWT token expired");
+                return false;
+            }
+
+            return true;
+        } catch (Exception e) {
+            log.warn("Teams JWT validation failed: {}", e.getMessage());
+            return false;
+        }
     }
 
-    private boolean verifyGoogleChatToken(HttpServletRequest request) {
+    /**
+     * Validates Google Chat JWT token against Google's public keys.
+     * Verifies signature, issuer (chat@system.gserviceaccount.com), and expiry.
+     */
+    private boolean verifyGoogleChatJwt(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) return false;
-        // Google Chat uses JWT tokens signed by Google's service account.
-        // In production, validate against Google's public keys.
         String token = authHeader.substring(7);
-        return !token.isEmpty();
+        if (token.isEmpty()) return false;
+
+        try {
+            JWKSet jwkSet = fetchJwkSet(GOOGLE_JWKS_URL);
+            DefaultJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
+            processor.setJWSKeySelector(new JWSVerificationKeySelector<>(
+                    JWSAlgorithm.RS256, new ImmutableJWKSet<>(jwkSet)));
+
+            JWTClaimsSet claims = processor.process(token, null);
+
+            // Verify issuer
+            String issuer = claims.getIssuer();
+            if (!GOOGLE_ISSUER.equals(issuer)) {
+                log.warn("Google Chat JWT issuer mismatch: expected={} actual={}", GOOGLE_ISSUER, issuer);
+                return false;
+            }
+
+            // Verify not expired
+            if (claims.getExpirationTime() != null
+                    && claims.getExpirationTime().before(new java.util.Date())) {
+                log.warn("Google Chat JWT token expired");
+                return false;
+            }
+
+            return true;
+        } catch (Exception e) {
+            log.warn("Google Chat JWT validation failed: {}", e.getMessage());
+            return false;
+        }
     }
 
+    /**
+     * Verifies Discord Ed25519 signature using the application's public key.
+     * Uses Java 15+ native EdDSA support.
+     */
     private boolean verifyDiscordSignature(HttpServletRequest request, byte[] body) {
-        String publicKey = secretsConfig.getDiscordPublicKey();
-        if (publicKey == null || publicKey.isEmpty()) {
+        String publicKeyHex = secretsConfig.getDiscordPublicKey();
+        if (publicKeyHex == null || publicKeyHex.isEmpty()) {
             log.warn("Discord public key not configured, rejecting webhook");
             return false;
         }
 
-        String signature = request.getHeader("X-Signature-Ed25519");
+        String signatureHex = request.getHeader("X-Signature-Ed25519");
         String timestamp = request.getHeader("X-Signature-Timestamp");
-        if (signature == null || timestamp == null) return false;
+        if (signatureHex == null || timestamp == null) return false;
 
-        // Discord uses Ed25519 signature verification.
-        // For now verify headers are present; full Ed25519 requires a crypto library.
-        return !signature.isEmpty() && !timestamp.isEmpty();
+        try {
+            // Decode the public key from hex
+            byte[] publicKeyBytes = HexFormat.of().parseHex(publicKeyHex);
+
+            // Build the message to verify: timestamp + body
+            byte[] timestampBytes = timestamp.getBytes(StandardCharsets.UTF_8);
+            byte[] message = new byte[timestampBytes.length + body.length];
+            System.arraycopy(timestampBytes, 0, message, 0, timestampBytes.length);
+            System.arraycopy(body, 0, message, timestampBytes.length, body.length);
+
+            // Decode the signature from hex
+            byte[] signatureBytes = HexFormat.of().parseHex(signatureHex);
+
+            // Verify using Java EdDSA
+            KeyFactory keyFactory = KeyFactory.getInstance("EdDSA");
+            java.security.spec.EdECPublicKeySpec keySpec = decodeEd25519PublicKey(publicKeyBytes);
+            PublicKey pubKey = keyFactory.generatePublic(keySpec);
+
+            Signature verifier = Signature.getInstance("Ed25519");
+            verifier.initVerify(pubKey);
+            verifier.update(message);
+            return verifier.verify(signatureBytes);
+        } catch (Exception e) {
+            log.warn("Discord Ed25519 verification failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private java.security.spec.EdECPublicKeySpec decodeEd25519PublicKey(byte[] publicKeyBytes) {
+        // Ed25519 public keys are 32 bytes. Decode the y coordinate and sign bit.
+        if (publicKeyBytes.length != 32) {
+            throw new IllegalArgumentException("Ed25519 public key must be 32 bytes");
+        }
+
+        // The last byte's MSB is the sign bit of x
+        boolean xOdd = (publicKeyBytes[31] & 0x80) != 0;
+
+        // Clear the sign bit for y decoding
+        byte[] yBytes = publicKeyBytes.clone();
+        yBytes[31] &= 0x7F;
+
+        // Reverse bytes (Ed25519 is little-endian)
+        byte[] reversed = new byte[yBytes.length];
+        for (int i = 0; i < yBytes.length; i++) {
+            reversed[i] = yBytes[yBytes.length - 1 - i];
+        }
+
+        java.math.BigInteger y = new java.math.BigInteger(1, reversed);
+        java.security.spec.EdECPoint point = new java.security.spec.EdECPoint(xOdd, y);
+        return new java.security.spec.EdECPublicKeySpec(NamedParameterSpec.ED25519, point);
+    }
+
+    private JWKSet fetchJwkSet(String url) throws Exception {
+        CachedJwkSet cached = jwksCache.get(url);
+        long now = System.currentTimeMillis();
+
+        // Cache JWKS for 1 hour
+        if (cached != null && (now - cached.fetchedAt) < 3_600_000) {
+            return cached.jwkSet;
+        }
+
+        JWKSet jwkSet = JWKSet.load(URI.create(url).toURL());
+        jwksCache.put(url, new CachedJwkSet(jwkSet, now));
+        return jwkSet;
     }
 
     private String hmacSha256(String secret, String data) {
@@ -160,4 +305,6 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
         String[] parts = path.split("/");
         return parts.length > 2 ? parts[2] : "unknown";
     }
+
+    private record CachedJwkSet(JWKSet jwkSet, long fetchedAt) {}
 }

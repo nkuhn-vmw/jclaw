@@ -24,6 +24,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class AgentRuntime {
@@ -37,9 +38,7 @@ public class AgentRuntime {
     private final ContentFilterChain contentFilterChain;
     private final AgentConfigService agentConfigService;
     private final AuditService auditService;
-    private final Timer llmLatencyTimer;
-    private final Counter messagesProcessed;
-    private final Counter messagesErrored;
+    private final MeterRegistry meterRegistry;
 
     public AgentRuntime(ModelRouter modelRouter,
                        ToolRegistry toolRegistry,
@@ -56,15 +55,7 @@ public class AgentRuntime {
         this.contentFilterChain = contentFilterChain;
         this.agentConfigService = agentConfigService;
         this.auditService = auditService;
-        this.llmLatencyTimer = Timer.builder("jclaw.llm.latency")
-                .description("LLM call latency")
-                .register(meterRegistry);
-        this.messagesProcessed = Counter.builder("jclaw.messages.processed")
-                .description("Messages processed successfully")
-                .register(meterRegistry);
-        this.messagesErrored = Counter.builder("jclaw.messages.errored")
-                .description("Messages that encountered errors")
-                .register(meterRegistry);
+        this.meterRegistry = meterRegistry;
     }
 
     public Flux<AgentResponse> processMessage(AgentContext context, InboundMessage message) {
@@ -73,57 +64,72 @@ public class AgentRuntime {
             MDC.put("principal", context.principal());
             MDC.put("channelType", context.channelType());
 
-            try {
-                // 1. Resolve session
-                Session session = sessionManager.resolveSession(context, message);
-                MDC.put("sessionId", session.getId().toString());
+            // 1. Resolve session
+            Session session = sessionManager.resolveSession(context, message);
+            MDC.put("sessionId", session.getId().toString());
 
-                // 2. Content filtering
-                contentFilterChain.filterInbound(message, context);
+            // 2. Content filtering (throws ContentFilterException if rejected)
+            contentFilterChain.filterInbound(message, context);
 
-                // 3. Store user message
-                sessionManager.addMessage(session.getId(), MessageRole.USER,
-                        message.content(), estimateTokens(message.content()));
+            // 3. Store user message
+            sessionManager.addMessage(session.getId(), MessageRole.USER,
+                    message.content(), estimateTokens(message.content()));
 
-                // 4. Build prompt
-                Prompt prompt = promptService.buildPrompt(context, session, message);
+            // 4. Build prompt
+            Prompt prompt = promptService.buildPrompt(context, session, message);
 
-                // 5. Resolve agent config, model, and tools
-                AgentConfig config = agentConfigService.getOrCreateDefault(context.agentId());
-                ChatModel model = modelRouter.resolveModel(context.agentId(), config);
-                List<ToolCallback> tools = toolRegistry.resolveTools(context);
+            // 5. Resolve agent config, model, and tools
+            AgentConfig config = agentConfigService.getOrCreateDefault(context.agentId());
+            ChatModel model = modelRouter.resolveModel(context.agentId(), config);
+            List<ToolCallback> tools = toolRegistry.resolveTools(context);
 
-                // 6. Execute LLM call with tools
-                ChatClient chatClient = ChatClient.builder(model).build();
-                ChatResponse response = llmLatencyTimer.record(() -> {
-                    ChatClient.ChatClientRequestSpec spec = chatClient.prompt(prompt);
-                    if (!tools.isEmpty()) {
-                        spec = spec.tools(tools);
-                    }
-                    return spec.call().chatResponse();
-                });
-
-                String responseContent = response.getResult().getOutput().getText();
-
-                // 7. Store assistant response
-                sessionManager.addMessage(session.getId(), MessageRole.ASSISTANT,
-                        responseContent, estimateTokens(responseContent));
-
-                // 8. Audit
-                auditService.logSessionEvent("MESSAGE_PROCESSED", context.principal(),
-                        context.agentId(), session.getId(), "Message processed");
-
-                messagesProcessed.increment();
-                return new AgentResponse(responseContent);
-            } finally {
-                MDC.clear();
-            }
-        }).flux()
+            return new LlmCallContext(session, prompt, model, tools, config);
+        })
         .subscribeOn(Schedulers.boundedElastic())
+        .flatMapMany(ctx -> {
+            Timer.Sample sample = Timer.start(meterRegistry);
+
+            // 6. Execute streaming LLM call
+            ChatClient chatClient = ChatClient.builder(ctx.model()).build();
+            ChatClient.ChatClientRequestSpec spec = chatClient.prompt(ctx.prompt());
+            if (!ctx.tools().isEmpty()) {
+                spec = spec.tools(ctx.tools());
+            }
+
+            return spec.stream().chatResponse()
+                .map(chatResponse -> {
+                    String text = chatResponse.getResult() != null
+                            && chatResponse.getResult().getOutput() != null
+                            ? chatResponse.getResult().getOutput().getText()
+                            : "";
+                    return new AgentResponse(text != null ? text : "");
+                })
+                .filter(response -> response.content() != null && !response.content().isEmpty())
+                .doOnComplete(() -> {
+                    sample.stop(Timer.builder("jclaw.llm.latency")
+                            .tag("agent", context.agentId())
+                            .tag("model", ctx.config().getModel() != null ? ctx.config().getModel() : "default")
+                            .register(meterRegistry));
+                    Counter.builder("jclaw.messages.processed")
+                            .tag("channel", context.channelType())
+                            .tag("agent", context.agentId())
+                            .tag("outcome", "success")
+                            .register(meterRegistry).increment();
+
+                    auditService.logSessionEvent("MESSAGE_PROCESSED", context.principal(),
+                            context.agentId(), ctx.session().getId(), "Message processed");
+                })
+                .doFinally(signal -> MDC.clear());
+        })
         .onErrorResume(e -> {
             log.error("Error processing message for agent={} principal={}",
                     context.agentId(), context.principal(), e);
-            messagesErrored.increment();
+            Counter.builder("jclaw.messages.processed")
+                    .tag("channel", context.channelType())
+                    .tag("agent", context.agentId())
+                    .tag("outcome", "error")
+                    .register(meterRegistry).increment();
+            MDC.clear();
             return Flux.just(new AgentResponse(
                     "I encountered an error processing your request. Please try again."));
         });
@@ -132,4 +138,12 @@ public class AgentRuntime {
     private int estimateTokens(String text) {
         return text != null ? text.length() / 4 : 0;
     }
+
+    private record LlmCallContext(
+            Session session,
+            Prompt prompt,
+            ChatModel model,
+            List<ToolCallback> tools,
+            AgentConfig config
+    ) {}
 }

@@ -11,7 +11,7 @@ public class EgressAllowlistValidator {
 
     public boolean isAllowed(String url, AgentConfig agentConfig) {
         if (agentConfig == null || agentConfig.getEgressAllowlist() == null
-                || agentConfig.getEgressAllowlist().length == 0) {
+                || agentConfig.getEgressAllowlist().isEmpty()) {
             return false; // deny by default if no allowlist configured
         }
 

@@ -46,6 +46,7 @@ dependencies {
 
     // Cloud Foundry
     implementation 'io.pivotal.cfenv:java-cfenv-boot:3.2.0'
+    implementation 'io.pivotal.cfenv:java-cfenv-boot-pivotal-sso:3.2.0'
 
     // Database
     runtimeOnly 'org.postgresql:postgresql'
@@ -64,6 +65,9 @@ dependencies {
 
     // Rate limiting
     implementation 'com.bucket4j:bucket4j_jdk17-redis-common:8.14.0'
+
+    // JWT/JOSE for webhook authentication (Teams, Google Chat)
+    implementation 'com.nimbusds:nimbus-jose-jwt:9.40'
 
     // Utilities
     compileOnly 'org.projectlombok:lombok'

@@ -50,7 +50,7 @@ class FullFlowIntegrationTest {
     void agentConfigCrud() {
         AgentConfig config = new AgentConfig("ops-agent", "Ops Assistant");
         config.setModel("claude-sonnet-4-20250514");
-        config.setAllowedTools(new String[]{"web_search", "http_fetch"});
+        config.setAllowedTools(java.util.Set.of("web_search", "http_fetch"));
 
         agentConfigRepository.save(config);
 
