@@ -28,6 +28,12 @@ management:
       show-details: when-authorized
       probes:
         enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  observations:
+    annotations:
+      enabled: true
 
 jclaw:
   session:

@@ -18,12 +18,24 @@
     <!-- JSON structured logging for cloud deployment with PII redaction -->
     <springProfile name="cloud">
         <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
-            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-                <includeMdcKeyName>requestId</includeMdcKeyName>
-                <includeMdcKeyName>sessionId</includeMdcKeyName>
-                <includeMdcKeyName>agentId</includeMdcKeyName>
-                <includeMdcKeyName>channelType</includeMdcKeyName>
-                <includeMdcKeyName>principal</includeMdcKeyName>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp/>
+                    <logLevel/>
+                    <loggerName/>
+                    <mdc>
+                        <includeMdcKeyName>requestId</includeMdcKeyName>
+                        <includeMdcKeyName>sessionId</includeMdcKeyName>
+                        <includeMdcKeyName>agentId</includeMdcKeyName>
+                        <includeMdcKeyName>channelType</includeMdcKeyName>
+                        <includeMdcKeyName>principal</includeMdcKeyName>
+                    </mdc>
+                    <!-- Use %piiMsg conversion word for PII-redacted message -->
+                    <pattern>
+                        <pattern>{"message": "%piiMsg"}</pattern>
+                    </pattern>
+                    <stackTrace/>
+                </providers>
             </encoder>
         </appender>
         <root level="INFO">

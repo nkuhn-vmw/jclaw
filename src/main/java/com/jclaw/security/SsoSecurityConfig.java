@@ -50,9 +50,10 @@ public class SsoSecurityConfig {
                         .requestMatchers("/api/agents/*/sessions/**").hasAnyAuthority(
                                 "SCOPE_jclaw.operator", "SCOPE_jclaw.admin")
                         .requestMatchers("/api/chat/**").hasAnyAuthority(
-                                "SCOPE_jclaw.user", "SCOPE_jclaw.admin")
+                                "SCOPE_jclaw.user", "SCOPE_jclaw.admin", "SCOPE_jclaw.service")
                         .requestMatchers("/api/webchat/**").hasAnyAuthority(
                                 "SCOPE_jclaw.user", "SCOPE_jclaw.admin")
+                        .requestMatchers("/api/service/**").hasAuthority("SCOPE_jclaw.service")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(

@@ -115,6 +115,12 @@ public class ChannelRouter {
                                     .collect(Collectors.joining(""));
                             if (adapter == null) return Mono.empty();
 
+                            // Chunk messages for channels with size limits
+                            int maxLen = adapter.maxMessageLength();
+                            if (maxLen > 0 && combined.length() > maxLen) {
+                                return sendChunked(adapter, message, combined, maxLen);
+                            }
+
                             // Propagate threadId from inbound to outbound message
                             return adapter.sendMessage(
                                     new OutboundMessage(message.channelType(),
@@ -159,9 +165,11 @@ public class ChannelRouter {
                 .filter(a -> a.getChannels() != null && a.getChannels().stream()
                         .anyMatch(ch -> {
                             if (!ch.getType().equals(message.channelType())) return false;
-                            if (ch.getWorkspace() != null && !ch.getWorkspace().isEmpty()
-                                    && workspace != null && !ch.getWorkspace().equals(workspace)) {
-                                return false;
+                            // If binding specifies a workspace, message must match it
+                            if (ch.getWorkspace() != null && !ch.getWorkspace().isEmpty()) {
+                                if (workspace == null || !ch.getWorkspace().equals(workspace)) {
+                                    return false;
+                                }
                             }
                             if (ch.getChannels() != null && !ch.getChannels().isEmpty()) {
                                 return ch.getChannels().contains(message.conversationId());
@@ -196,6 +204,36 @@ public class ChannelRouter {
                     return true;
                 })
                 .orElse(true);
+    }
+
+    /**
+     * Splits a long message into chunks at word boundaries and sends them sequentially.
+     */
+    private Mono<Void> sendChunked(ChannelAdapter adapter, InboundMessage message,
+                                   String content, int maxLen) {
+        List<String> chunks = new java.util.ArrayList<>();
+        int start = 0;
+        while (start < content.length()) {
+            int end = Math.min(start + maxLen, content.length());
+            if (end < content.length()) {
+                // Try to break at a newline or space
+                int breakAt = content.lastIndexOf('\n', end);
+                if (breakAt <= start) breakAt = content.lastIndexOf(' ', end);
+                if (breakAt > start) end = breakAt + 1;
+            }
+            chunks.add(content.substring(start, end));
+            start = end;
+        }
+
+        Mono<Void> chain = Mono.empty();
+        for (String chunk : chunks) {
+            chain = chain.then(adapter.sendMessage(
+                    new OutboundMessage(message.channelType(),
+                            message.conversationId(),
+                            message.threadId(),
+                            chunk, Map.of())));
+        }
+        return chain;
     }
 
     public ChannelAdapter getAdapter(String channelType) {

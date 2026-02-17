@@ -111,4 +111,7 @@ public class DiscordChannelAdapter extends ListenerAdapter implements ChannelAda
 
     @Override
     public boolean supportsReactions() { return true; }
+
+    @Override
+    public int maxMessageLength() { return 2000; }
 }

@@ -84,8 +84,8 @@ public class CompactionService {
         compactionMsg.setTokenCount(estimateTokens(summary));
         messageRepository.save(compactionMsg);
 
-        // Update session status
-        session.setStatus(SessionStatus.COMPACTED);
+        // Session remains ACTIVE after compaction — setting COMPACTED breaks resolveSession()
+        // which only finds ACTIVE sessions, orphaning the user's conversation
         sessionRepository.save(session);
 
         log.info("Compacted {} messages in session {} using LLM summary",

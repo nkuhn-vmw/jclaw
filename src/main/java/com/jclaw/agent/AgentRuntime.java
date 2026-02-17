@@ -14,10 +14,10 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.tool.ToolCallback;
+import io.micrometer.observation.annotation.Observed;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -61,6 +61,7 @@ public class AgentRuntime {
         this.chatClientBuilder = chatClientBuilder;
     }
 
+    @Observed(name = "jclaw.agent.process", contextualName = "agent-process-message")
     public Flux<AgentResponse> processMessage(AgentContext context, InboundMessage message) {
         return Mono.fromCallable(() -> {
             MDC.put("agentId", context.agentId());
@@ -86,10 +87,9 @@ public class AgentRuntime {
 
             // 5. Resolve agent config, model, and tools
             AgentConfig config = agentConfigService.getOrCreateDefault(context.agentId());
-            ChatModel model = modelRouter.resolveModel(context.agentId(), config);
             List<ToolCallback> tools = toolRegistry.resolveTools(context);
 
-            return new LlmCallContext(session, prompt, model, tools, config);
+            return new LlmCallContext(session, prompt, tools, config);
         })
         .subscribeOn(Schedulers.boundedElastic())
         .flatMapMany(ctx -> {
@@ -99,14 +99,18 @@ public class AgentRuntime {
             // Record LLM request metric
             metrics.recordLlmRequest(modelName, context.agentId());
 
-            // 6. Build ChatClient from the resolved model
-            ChatClient chatClient = ChatClient.builder(ctx.model()).build();
+            // 6. Build ChatClient using the injected builder (preserves auto-config advisors)
+            //    The model is resolved via ModelRouter and applied through prompt options
+            ChatClient chatClient = chatClientBuilder.build();
 
-            // 7. Configure request with maxTokens from agent config
+            // 7. Configure request with maxTokens and model from agent config
+            AnthropicChatOptions.Builder optionsBuilder = AnthropicChatOptions.builder()
+                    .maxTokens(ctx.config().getMaxTokensPerRequest());
+            if (ctx.config().getModel() != null) {
+                optionsBuilder.model(ctx.config().getModel());
+            }
             ChatClient.ChatClientRequestSpec spec = chatClient.prompt(ctx.prompt())
-                    .options(AnthropicChatOptions.builder()
-                            .maxTokens(ctx.config().getMaxTokensPerRequest())
-                            .build());
+                    .options(optionsBuilder.build());
             if (!ctx.tools().isEmpty()) {
                 spec = spec.tools(ctx.tools());
             }
@@ -156,6 +160,9 @@ public class AgentRuntime {
                                 fullResponse, estimateTokens(fullResponse));
                     }
 
+                    // Record message processed metric (OBS-001)
+                    metrics.recordMessageProcessed(context.channelType(), context.agentId());
+
                     auditService.logSessionEvent("MESSAGE_PROCESSED", context.principal(),
                             context.agentId(), ctx.session().getId(), "Message processed");
                 })
@@ -199,7 +206,6 @@ public class AgentRuntime {
     private record LlmCallContext(
             Session session,
             Prompt prompt,
-            ChatModel model,
             List<ToolCallback> tools,
             AgentConfig config
     ) {}

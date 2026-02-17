@@ -7,6 +7,7 @@ import com.jclaw.tool.RiskLevel;
 import com.jclaw.tool.validation.EgressAllowlistValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Component;
@@ -42,7 +43,8 @@ public class HttpFetchTool implements ToolCallback {
             String url = extractField(toolInput, "url");
             if (url == null) return "{\"error\": \"No URL provided\"}";
 
-            String agentId = extractField(toolInput, "agentId");
+            // Use agentId from MDC (set by AgentRuntime) — never trust LLM-provided agentId
+            String agentId = MDC.get("agentId");
             AgentConfig config = agentId != null ? agentConfigService.getAgentConfig(agentId) : null;
 
             // Enforce egress allowlist
@@ -74,8 +76,7 @@ public class HttpFetchTool implements ToolCallback {
                 .description("Fetch content from a URL (egress allowlist enforced)")
                 .inputSchema("""
                     {"type":"object","properties":{
-                      "url":{"type":"string","description":"The URL to fetch content from"},
-                      "agentId":{"type":"string","description":"Agent ID for egress policy lookup"}
+                      "url":{"type":"string","description":"The URL to fetch content from"}
                     },"required":["url"]}""")
                 .build();
     }

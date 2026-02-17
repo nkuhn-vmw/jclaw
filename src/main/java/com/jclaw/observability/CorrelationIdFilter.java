@@ -1,5 +1,6 @@
 package com.jclaw.observability;
 
+import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +28,12 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     private static final String CHANNEL_TYPE_HEADER = "X-Channel-Type";
     private static final String CHANNEL_TRACE_ID_HEADER = "X-Channel-Trace-ID";
 
+    private final Tracer tracer;
+
+    public CorrelationIdFilter(Tracer tracer) {
+        this.tracer = tracer;
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                    HttpServletResponse response,
@@ -39,6 +46,15 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         MDC.put("requestId", requestId);
         response.setHeader(REQUEST_ID_HEADER, requestId);
 
+        // Propagate trace ID from distributed tracing to MDC for log correlation
+        if (tracer.currentSpan() != null && tracer.currentSpan().context() != null) {
+            String traceId = tracer.currentSpan().context().traceId();
+            if (traceId != null) {
+                MDC.put("traceId", traceId);
+                response.setHeader("X-Trace-ID", traceId);
+            }
+        }
+
         // Propagate optional context headers to MDC
         putIfPresent(request, SESSION_ID_HEADER, "sessionId");
         putIfPresent(request, AGENT_ID_HEADER, "agentId");
@@ -49,6 +65,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             MDC.remove("requestId");
+            MDC.remove("traceId");
             MDC.remove("sessionId");
             MDC.remove("agentId");
             MDC.remove("channelType");

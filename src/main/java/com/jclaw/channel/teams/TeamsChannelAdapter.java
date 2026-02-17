@@ -106,6 +106,9 @@ public class TeamsChannelAdapter implements ChannelAdapter {
     @Override
     public boolean supportsReactions() { return true; }
 
+    @Override
+    public int maxMessageLength() { return 28000; }
+
     public void processActivity(String userId, String conversationId,
                                String text, Map<String, Object> metadata) {
         InboundMessage msg = new InboundMessage("teams", userId, conversationId,

@@ -153,4 +153,7 @@ public class SlackChannelAdapter implements ChannelAdapter {
 
     @Override
     public boolean supportsReactions() { return true; }
+
+    @Override
+    public int maxMessageLength() { return 4000; }
 }

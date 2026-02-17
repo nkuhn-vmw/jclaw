@@ -31,6 +31,13 @@ public class JclawMetrics {
                 .register(registry).increment();
     }
 
+    public void recordMessageProcessed(String channel, String agent) {
+        Counter.builder("jclaw.messages.processed")
+                .tag("channel", channel)
+                .tag("agent", agent)
+                .register(registry).increment();
+    }
+
     // --- LLM metrics ---
 
     public void recordLlmRequest(String model, String agent) {

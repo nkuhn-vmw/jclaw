@@ -44,9 +44,32 @@ public class PromptTemplateService {
         String systemPrompt = resolveSystemPrompt(context.agentId());
         messages.add(new SystemMessage(systemPrompt));
 
-        // Session history
+        // Resolve maxHistoryTokens from agent config or global default
+        int maxHistoryTokens = properties.getSession().getMaxHistoryTokens();
+        AgentConfig config = agentConfigService.getAgentConfig(context.agentId());
+        if (config != null && config.getMaxHistoryTokens() > 0) {
+            maxHistoryTokens = config.getMaxHistoryTokens();
+        }
+
+        // Session history — enforce maxHistoryTokens by trimming oldest messages
         List<SessionMessage> history = sessionManager.getHistory(session.getId());
-        for (SessionMessage histMsg : history) {
+        int tokenBudget = maxHistoryTokens;
+        int currentUserTokens = estimateTokens(message.content());
+        tokenBudget -= currentUserTokens;
+        tokenBudget -= estimateTokens(systemPrompt);
+
+        // Walk history from newest to oldest, accumulating tokens
+        List<SessionMessage> trimmedHistory = new ArrayList<>();
+        for (int i = history.size() - 1; i >= 0; i--) {
+            SessionMessage histMsg = history.get(i);
+            int msgTokens = histMsg.getTokenCount() != null ? histMsg.getTokenCount()
+                    : estimateTokens(histMsg.getContent());
+            if (tokenBudget - msgTokens < 0) break;
+            tokenBudget -= msgTokens;
+            trimmedHistory.add(0, histMsg);
+        }
+
+        for (SessionMessage histMsg : trimmedHistory) {
             switch (histMsg.getRole()) {
                 case USER -> messages.add(new UserMessage(histMsg.getContent()));
                 case ASSISTANT -> messages.add(new AssistantMessage(histMsg.getContent()));
@@ -59,6 +82,10 @@ public class PromptTemplateService {
         messages.add(new UserMessage(message.content()));
 
         return new Prompt(messages);
+    }
+
+    private int estimateTokens(String text) {
+        return text != null ? text.length() / 4 : 0;
     }
 
     private String resolveSystemPrompt(String agentId) {

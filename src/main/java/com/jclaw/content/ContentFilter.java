@@ -7,6 +7,13 @@ public interface ContentFilter {
 
     String name();
 
+    /**
+     * Filter with per-agent policy. Default delegates to legacy method.
+     */
+    default FilterResult filter(InboundMessage message, AgentContext context, ContentFilterPolicy policy) {
+        return filter(message, context);
+    }
+
     FilterResult filter(InboundMessage message, AgentContext context);
 
     record FilterResult(boolean passed, String reason) {

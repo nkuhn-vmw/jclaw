@@ -8,6 +8,7 @@ import com.jclaw.observability.JclawMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import io.micrometer.observation.annotation.Observed;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +44,7 @@ public class SessionManager {
         this.redisTemplate = redisTemplate;
     }
 
+    @Observed(name = "jclaw.session.resolve", contextualName = "session-resolve")
     @Transactional
     public Session resolveSession(AgentContext context, InboundMessage message) {
         SessionScope scope = resolveScope(message);

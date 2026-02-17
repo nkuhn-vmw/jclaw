@@ -16,4 +16,10 @@ public interface ChannelAdapter {
     boolean supportsThreading();
 
     boolean supportsReactions();
+
+    /**
+     * Maximum message length in characters for this channel.
+     * Returns 0 if unlimited. Used for message chunking.
+     */
+    default int maxMessageLength() { return 0; }
 }

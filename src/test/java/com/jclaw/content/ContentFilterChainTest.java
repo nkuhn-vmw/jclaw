@@ -1,5 +1,6 @@
 package com.jclaw.content;
 
+import com.jclaw.agent.AgentConfigService;
 import com.jclaw.agent.AgentContext;
 import com.jclaw.audit.AuditService;
 import com.jclaw.channel.InboundMessage;
@@ -21,6 +22,9 @@ class ContentFilterChainTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private AgentConfigService agentConfigService;
+
     private final JclawMetrics metrics = new JclawMetrics(new SimpleMeterRegistry());
 
     private ContentFilterChain filterChain;
@@ -31,7 +35,7 @@ class ContentFilterChainTest {
         filterChain = new ContentFilterChain(
                 List.of(new InputSanitizer(), new PatternDetector(),
                         new InstructionDetector(), new EgressGuard()),
-                auditService, metrics);
+                auditService, metrics, agentConfigService);
         context = new AgentContext("test-agent", "user@example.com", "rest-api");
     }
 

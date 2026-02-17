@@ -118,6 +118,9 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
     @Override
     public boolean supportsReactions() { return false; }
 
+    @Override
+    public int maxMessageLength() { return 4096; }
+
     public void processEvent(String userId, String spaceId, String text,
                             Map<String, Object> metadata) {
         InboundMessage msg = new InboundMessage("google-chat", userId, spaceId,
