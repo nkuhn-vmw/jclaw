@@ -21,4 +21,6 @@ public interface AuditRepository extends JpaRepository<AuditEvent, UUID> {
     List<AuditEvent> findByTimestampBefore(Instant cutoff);
 
     long deleteByTimestampBefore(Instant cutoff);
+
+    long deleteByEventTypeAndTimestampBefore(String eventType, Instant cutoff);
 }

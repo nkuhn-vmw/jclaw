@@ -3,6 +3,7 @@ package com.jclaw.content;
 import com.jclaw.agent.AgentContext;
 import com.jclaw.audit.AuditService;
 import com.jclaw.channel.InboundMessage;
+import com.jclaw.observability.JclawMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -16,16 +17,20 @@ public class ContentFilterChain {
 
     private final List<ContentFilter> filters;
     private final AuditService auditService;
+    private final JclawMetrics metrics;
 
-    public ContentFilterChain(List<ContentFilter> filters, AuditService auditService) {
+    public ContentFilterChain(List<ContentFilter> filters, AuditService auditService,
+                             JclawMetrics metrics) {
         this.filters = filters;
         this.auditService = auditService;
+        this.metrics = metrics;
     }
 
     public void filterInbound(InboundMessage message, AgentContext context) {
         for (ContentFilter filter : filters) {
             ContentFilter.FilterResult result = filter.filter(message, context);
             if (!result.passed()) {
+                metrics.recordContentFilterTriggered(filter.name(), "REJECTED");
                 auditService.logContentFilter(filter.name(), "REJECTED",
                         context.principal(), message.channelType(), "FILTERED");
                 log.warn("Content filter {} rejected message from principal={}: {}",

@@ -3,6 +3,9 @@ package com.jclaw.channel.googlechat;
 import com.jclaw.channel.ChannelAdapter;
 import com.jclaw.channel.InboundMessage;
 import com.jclaw.channel.OutboundMessage;
+import com.jclaw.config.SecretsConfig;
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.auth.oauth2.ServiceAccountCredentials;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -12,6 +15,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
+import jakarta.annotation.PostConstruct;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -24,11 +31,31 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
     private final Sinks.Many<InboundMessage> messageSink =
             Sinks.many().multicast().onBackpressureBuffer();
     private final WebClient webClient;
+    private final SecretsConfig secretsConfig;
+    private GoogleCredentials credentials;
 
-    public GoogleChatChannelAdapter() {
+    public GoogleChatChannelAdapter(SecretsConfig secretsConfig) {
+        this.secretsConfig = secretsConfig;
         this.webClient = WebClient.builder()
                 .baseUrl(GOOGLE_CHAT_API)
                 .build();
+    }
+
+    @PostConstruct
+    public void init() {
+        try {
+            String credentialsJson = secretsConfig.getGoogleChatCredentials();
+            if (credentialsJson != null && !credentialsJson.isBlank()) {
+                credentials = ServiceAccountCredentials.fromStream(
+                        new ByteArrayInputStream(credentialsJson.getBytes(StandardCharsets.UTF_8)))
+                        .createScoped(List.of("https://www.googleapis.com/auth/chat.bot"));
+                log.info("Google Chat service account credentials loaded");
+            } else {
+                log.warn("Google Chat credentials not configured");
+            }
+        } catch (Exception e) {
+            log.error("Failed to load Google Chat credentials", e);
+        }
     }
 
     @Override
@@ -41,25 +68,12 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
 
     @Override
     public Mono<Void> sendMessage(OutboundMessage msg) {
-        // Use Google Chat API to send messages to the space
         String spaceId = msg.conversationId();
 
-        Map<String, Object> message = Map.of(
-                "text", msg.content()
-        );
+        Map<String, Object> message = Map.of("text", msg.content());
 
-        // Derive the thread key from metadata if available
         String threadKey = msg.metadata() != null
                 ? (String) msg.metadata().get("threadKey") : null;
-
-        WebClient.RequestBodySpec requestSpec = webClient.post()
-                .uri(uriBuilder -> {
-                    uriBuilder.path("/{spaceId}/messages");
-                    if (threadKey != null) {
-                        uriBuilder.queryParam("messageReplyOption", "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD");
-                    }
-                    return uriBuilder.build(spaceId);
-                });
 
         if (threadKey != null) {
             message = Map.of(
@@ -68,10 +82,25 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
             );
         }
 
-        return requestSpec
-                .bodyValue(message)
-                .retrieve()
-                .bodyToMono(Void.class)
+        Map<String, Object> finalMessage = message;
+        return getAuthToken()
+                .flatMap(token -> {
+                    WebClient.RequestBodySpec requestSpec = webClient.post()
+                            .uri(uriBuilder -> {
+                                uriBuilder.path("/{spaceId}/messages");
+                                if (threadKey != null) {
+                                    uriBuilder.queryParam("messageReplyOption",
+                                            "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD");
+                                }
+                                return uriBuilder.build(spaceId);
+                            });
+
+                    return requestSpec
+                            .header("Authorization", "Bearer " + token)
+                            .bodyValue(finalMessage)
+                            .retrieve()
+                            .bodyToMono(Void.class);
+                })
                 .doOnSuccess(v -> log.debug("Google Chat message sent to {}", spaceId))
                 .doOnError(e -> log.error("Failed to send Google Chat message to {}: {}",
                         spaceId, e.getMessage()))
@@ -80,7 +109,6 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
 
     @Override
     public Mono<Void> sendTypingIndicator(String conversationId) {
-        // Google Chat API does not support typing indicators
         return Mono.empty();
     }
 
@@ -90,13 +118,20 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
     @Override
     public boolean supportsReactions() { return false; }
 
-    /**
-     * Called by the Google Chat webhook controller to process incoming messages.
-     */
     public void processEvent(String userId, String spaceId, String text,
                             Map<String, Object> metadata) {
         InboundMessage msg = new InboundMessage("google-chat", userId, spaceId,
                 null, text, metadata, java.time.Instant.now());
         messageSink.tryEmitNext(msg);
+    }
+
+    private Mono<String> getAuthToken() {
+        if (credentials == null) {
+            return Mono.error(new IllegalStateException("Google Chat credentials not configured"));
+        }
+        return Mono.fromCallable(() -> {
+            credentials.refreshIfExpired();
+            return credentials.getAccessToken().getTokenValue();
+        });
     }
 }

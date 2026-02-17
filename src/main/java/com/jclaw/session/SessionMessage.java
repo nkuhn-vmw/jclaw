@@ -25,13 +25,13 @@ public class SessionMessage {
     @Column(name = "token_count")
     private Integer tokenCount;
 
-    @Column(name = "tool_calls", length = 10000)
+    @Column(name = "tool_calls", length = 100000)
     private String toolCalls;
 
-    @Column(name = "tool_results", length = 10000)
+    @Column(name = "tool_results", length = 100000)
     private String toolResults;
 
-    @Column(length = 10000)
+    @Column(length = 100000)
     private String metadata = "{}";
 
     @Column(name = "created_at", nullable = false, updatable = false)

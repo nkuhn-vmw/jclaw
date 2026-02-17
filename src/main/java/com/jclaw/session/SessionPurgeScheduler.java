@@ -32,7 +32,6 @@ public class SessionPurgeScheduler {
         this.properties = properties;
     }
 
-    // Run daily at 3 AM
     @Scheduled(cron = "${jclaw.session.purge-cron:0 0 3 * * *}")
     @Transactional
     public void purgeExpiredSessions() {
@@ -77,6 +76,18 @@ public class SessionPurgeScheduler {
         long deleted = auditRepository.deleteByTimestampBefore(cutoff);
         if (deleted > 0) {
             log.info("Purged {} audit events older than {} days", deleted, retentionDays);
+        }
+    }
+
+    @Scheduled(cron = "${jclaw.content-filter.purge-cron:0 30 4 * * *}")
+    @Transactional
+    public void purgeOldContentFilterEvents() {
+        int retentionDays = properties.getSecurity().getDataRetention().getContentFilterEventsDays();
+        Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
+
+        long deleted = auditRepository.deleteByEventTypeAndTimestampBefore("CONTENT_FILTER", cutoff);
+        if (deleted > 0) {
+            log.info("Purged {} content filter events older than {} days", deleted, retentionDays);
         }
     }
 }

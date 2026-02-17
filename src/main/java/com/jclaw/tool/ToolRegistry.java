@@ -4,6 +4,7 @@ import com.jclaw.agent.AgentConfig;
 import com.jclaw.agent.AgentConfigService;
 import com.jclaw.agent.AgentContext;
 import com.jclaw.audit.AuditService;
+import com.jclaw.observability.JclawMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.ToolCallback;
@@ -26,15 +27,18 @@ public class ToolRegistry {
     private final ToolPolicy toolPolicy;
     private final AgentConfigService agentConfigService;
     private final AuditService auditService;
+    private final JclawMetrics metrics;
     private final ApplicationContext applicationContext;
 
     public ToolRegistry(ToolPolicy toolPolicy,
                        AgentConfigService agentConfigService,
                        AuditService auditService,
+                       JclawMetrics metrics,
                        ApplicationContext applicationContext) {
         this.toolPolicy = toolPolicy;
         this.agentConfigService = agentConfigService;
         this.auditService = auditService;
+        this.metrics = metrics;
         this.applicationContext = applicationContext;
     }
 
@@ -42,7 +46,6 @@ public class ToolRegistry {
     public void discoverTools() {
         Map<String, Object> beans = applicationContext.getBeansWithAnnotation(JclawTool.class);
         for (Object bean : beans.values()) {
-            // Use AnnotationUtils to handle CGLIB proxies correctly
             JclawTool annotation = AnnotationUtils.findAnnotation(bean.getClass(), JclawTool.class);
             if (annotation != null && bean instanceof ToolCallback callback) {
                 registerTool(annotation.name(), annotation.description(),
@@ -55,9 +58,7 @@ public class ToolRegistry {
     public void registerTool(String name, String description,
                             RiskLevel riskLevel, boolean requiresApproval,
                             ToolCallback callback) {
-        // Wrap callback with audit-logging proxy
-        ToolCallback auditedCallback = new AuditedToolCallback(callback, name, auditService);
-        tools.put(name, new ToolEntry(name, description, riskLevel, requiresApproval, auditedCallback));
+        tools.put(name, new ToolEntry(name, description, riskLevel, requiresApproval, callback));
         log.info("Registered tool: {} (risk={}, requiresApproval={})", name, riskLevel, requiresApproval);
     }
 
@@ -66,7 +67,8 @@ public class ToolRegistry {
         return tools.values().stream()
                 .filter(entry -> toolPolicy.isToolAllowed(
                         entry.name(), entry.riskLevel(), entry.requiresApproval(), config))
-                .map(ToolEntry::callback)
+                .map(entry -> new AuditedToolCallback(
+                        entry.callback(), entry.name(), auditService, metrics, context))
                 .collect(Collectors.toList());
     }
 
@@ -87,29 +89,40 @@ public class ToolRegistry {
     ) {}
 
     /**
-     * Wraps a ToolCallback to emit audit events on every invocation.
+     * Wraps a ToolCallback to emit audit events and metrics on every invocation.
+     * Created per-request with the current AgentContext for proper attribution.
      */
     private static class AuditedToolCallback implements ToolCallback {
         private final ToolCallback delegate;
         private final String toolName;
         private final AuditService auditService;
+        private final JclawMetrics metrics;
+        private final AgentContext context;
 
-        AuditedToolCallback(ToolCallback delegate, String toolName, AuditService auditService) {
+        AuditedToolCallback(ToolCallback delegate, String toolName,
+                           AuditService auditService, JclawMetrics metrics,
+                           AgentContext context) {
             this.delegate = delegate;
             this.toolName = toolName;
             this.auditService = auditService;
+            this.metrics = metrics;
+            this.context = context;
         }
 
         @Override
         public String call(String toolInput) {
             try {
                 String result = delegate.call(toolInput);
-                auditService.logToolCall(null, null, null, toolName, "SUCCESS",
+                auditService.logToolCall(context.principal(), context.agentId(),
+                        null, toolName, "SUCCESS",
                         "{\"input_length\":" + (toolInput != null ? toolInput.length() : 0) + "}");
+                metrics.recordToolInvocation(toolName, context.agentId(), "success");
                 return result;
             } catch (Exception e) {
-                auditService.logToolCall(null, null, null, toolName, "FAILURE",
+                auditService.logToolCall(context.principal(), context.agentId(),
+                        null, toolName, "FAILURE",
                         "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}");
+                metrics.recordToolInvocation(toolName, context.agentId(), "failure");
                 throw e;
             }
         }

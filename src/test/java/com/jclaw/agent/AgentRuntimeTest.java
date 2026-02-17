@@ -3,9 +3,9 @@ package com.jclaw.agent;
 import com.jclaw.audit.AuditService;
 import com.jclaw.channel.InboundMessage;
 import com.jclaw.content.ContentFilterChain;
+import com.jclaw.observability.JclawMetrics;
 import com.jclaw.session.*;
 import com.jclaw.tool.ToolRegistry;
-import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +14,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
 
 import java.util.List;
 import java.util.UUID;
@@ -33,16 +35,18 @@ class AgentRuntimeTest {
     @Mock private ContentFilterChain contentFilterChain;
     @Mock private AgentConfigService agentConfigService;
     @Mock private AuditService auditService;
+    @Mock private ChatModel chatModel;
 
-    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final JclawMetrics metrics = new JclawMetrics(new SimpleMeterRegistry());
 
     private AgentRuntime agentRuntime;
 
     @BeforeEach
     void setUp() {
+        ChatClient.Builder builder = ChatClient.builder(chatModel);
         agentRuntime = new AgentRuntime(
                 modelRouter, toolRegistry, sessionManager, promptService,
-                contentFilterChain, agentConfigService, auditService, meterRegistry);
+                contentFilterChain, agentConfigService, auditService, metrics, builder);
     }
 
     @Test

@@ -1,11 +1,13 @@
 package com.jclaw.tool.builtin;
 
+import com.jclaw.config.SecretsConfig;
 import com.jclaw.tool.JclawTool;
 import com.jclaw.tool.RiskLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -21,8 +23,13 @@ public class WebSearchTool implements ToolCallback {
     private static final Logger log = LoggerFactory.getLogger(WebSearchTool.class);
 
     private final WebClient webClient;
+    private final SecretsConfig secretsConfig;
+    private final String searchProvider;
 
-    public WebSearchTool() {
+    public WebSearchTool(SecretsConfig secretsConfig,
+                        @Value("${jclaw.search.provider:serpapi}") String searchProvider) {
+        this.secretsConfig = secretsConfig;
+        this.searchProvider = searchProvider;
         this.webClient = WebClient.builder().build();
     }
 
@@ -33,13 +40,58 @@ public class WebSearchTool implements ToolCallback {
             return "{\"error\": \"query is required\"}";
         }
 
-        // In production, integrate with SerpAPI, Brave Search, or similar.
-        // For now, return a structured placeholder indicating the query was received.
-        log.info("Web search requested: query={}", query);
-        return String.format(
-            "{\"query\":\"%s\",\"results\":[],\"message\":\"Web search provider not configured. " +
-            "Set vcap.services.jclaw-secrets.credentials.search-api-key to enable.\"}",
-            query.replace("\"", "'"));
+        String apiKey = secretsConfig.getSearchApiKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            log.warn("Web search requested but no API key configured");
+            return String.format(
+                "{\"query\":\"%s\",\"results\":[],\"message\":\"Web search provider not configured. " +
+                "Set search-api-key in jclaw-secrets service binding.\"}",
+                query.replace("\"", "'"));
+        }
+
+        log.info("Web search: provider={} query={}", searchProvider, query);
+
+        try {
+            String result;
+            if ("brave".equalsIgnoreCase(searchProvider)) {
+                result = searchBrave(query, apiKey);
+            } else {
+                result = searchSerpApi(query, apiKey);
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Web search failed: provider={} query={}", searchProvider, query, e);
+            return String.format(
+                "{\"query\":\"%s\",\"error\":\"%s\"}",
+                query.replace("\"", "'"),
+                e.getMessage().replace("\"", "'"));
+        }
+    }
+
+    private String searchSerpApi(String query, String apiKey) {
+        return webClient.get()
+                .uri("https://serpapi.com/search", uriBuilder -> uriBuilder
+                        .queryParam("q", query)
+                        .queryParam("api_key", apiKey)
+                        .queryParam("engine", "google")
+                        .queryParam("num", 5)
+                        .build())
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
+    }
+
+    private String searchBrave(String query, String apiKey) {
+        return webClient.get()
+                .uri("https://api.search.brave.com/res/v1/web/search", uriBuilder -> uriBuilder
+                        .queryParam("q", query)
+                        .queryParam("count", 5)
+                        .build())
+                .header("X-Subscription-Token", apiKey)
+                .header("Accept", "application/json")
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
     }
 
     @Override

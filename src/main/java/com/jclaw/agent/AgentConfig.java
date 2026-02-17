@@ -57,7 +57,7 @@ public class AgentConfig {
     @Embedded
     private ContentFilterPolicy contentFilterPolicy = new ContentFilterPolicy();
 
-    @Column(name = "config_json", length = 10000)
+    @Column(name = "config_json", length = 100000)
     private String configJson = "{}";
 
     @Column(name = "created_at", nullable = false, updatable = false)

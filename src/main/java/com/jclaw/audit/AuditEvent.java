@@ -39,7 +39,7 @@ public class AuditEvent {
     @Column(name = "resource_id", length = 256)
     private String resourceId;
 
-    @Column(length = 10000)
+    @Column(length = 100000)
     private String details = "{}";
 
     @Column(name = "source_ip", length = 45)

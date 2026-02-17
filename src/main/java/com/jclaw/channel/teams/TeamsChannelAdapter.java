@@ -6,14 +6,19 @@ import com.jclaw.channel.OutboundMessage;
 import com.jclaw.config.SecretsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Component
 @ConditionalOnProperty(name = "vcap.services.jclaw-secrets.credentials.teams-app-password", matchIfMissing = false)
@@ -21,17 +26,26 @@ public class TeamsChannelAdapter implements ChannelAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(TeamsChannelAdapter.class);
     private static final String BOT_FRAMEWORK_API = "https://smba.trafficmanager.net/teams";
+    private static final String LOGIN_URL = "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token";
+    private static final Duration TOKEN_REFRESH_BUFFER = Duration.ofMinutes(5);
 
     private final Sinks.Many<InboundMessage> messageSink =
             Sinks.many().multicast().onBackpressureBuffer();
     private final WebClient webClient;
+    private final WebClient tokenClient;
     private final SecretsConfig secretsConfig;
+    private final String appId;
 
-    public TeamsChannelAdapter(SecretsConfig secretsConfig) {
+    private final AtomicReference<CachedToken> cachedToken = new AtomicReference<>();
+
+    public TeamsChannelAdapter(SecretsConfig secretsConfig,
+                              @Value("${jclaw.teams.app-id:}") String appId) {
         this.secretsConfig = secretsConfig;
+        this.appId = appId;
         this.webClient = WebClient.builder()
                 .baseUrl(BOT_FRAMEWORK_API)
                 .build();
+        this.tokenClient = WebClient.builder().build();
     }
 
     @Override
@@ -44,7 +58,6 @@ public class TeamsChannelAdapter implements ChannelAdapter {
 
     @Override
     public Mono<Void> sendMessage(OutboundMessage msg) {
-        // Use Bot Framework REST API to send messages
         String serviceUrl = msg.metadata() != null
                 ? (String) msg.metadata().getOrDefault("serviceUrl", BOT_FRAMEWORK_API)
                 : BOT_FRAMEWORK_API;
@@ -55,13 +68,14 @@ public class TeamsChannelAdapter implements ChannelAdapter {
                 "conversation", Map.of("id", msg.conversationId())
         );
 
-        return webClient.post()
-                .uri(serviceUrl + "/v3/conversations/{conversationId}/activities",
-                        msg.conversationId())
-                .header("Authorization", "Bearer " + secretsConfig.getTeamsAppPassword())
-                .bodyValue(activity)
-                .retrieve()
-                .bodyToMono(Void.class)
+        return getAccessToken()
+                .flatMap(token -> webClient.post()
+                        .uri(serviceUrl + "/v3/conversations/{conversationId}/activities",
+                                msg.conversationId())
+                        .header("Authorization", "Bearer " + token)
+                        .bodyValue(activity)
+                        .retrieve()
+                        .bodyToMono(Void.class))
                 .doOnSuccess(v -> log.debug("Teams message sent to {}", msg.conversationId()))
                 .doOnError(e -> log.error("Failed to send Teams message to {}: {}",
                         msg.conversationId(), e.getMessage()))
@@ -75,13 +89,14 @@ public class TeamsChannelAdapter implements ChannelAdapter {
                 "conversation", Map.of("id", conversationId)
         );
 
-        return webClient.post()
-                .uri(BOT_FRAMEWORK_API + "/v3/conversations/{conversationId}/activities",
-                        conversationId)
-                .header("Authorization", "Bearer " + secretsConfig.getTeamsAppPassword())
-                .bodyValue(activity)
-                .retrieve()
-                .bodyToMono(Void.class)
+        return getAccessToken()
+                .flatMap(token -> webClient.post()
+                        .uri(BOT_FRAMEWORK_API + "/v3/conversations/{conversationId}/activities",
+                                conversationId)
+                        .header("Authorization", "Bearer " + token)
+                        .bodyValue(activity)
+                        .retrieve()
+                        .bodyToMono(Void.class))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -91,13 +106,41 @@ public class TeamsChannelAdapter implements ChannelAdapter {
     @Override
     public boolean supportsReactions() { return true; }
 
-    /**
-     * Called by the Teams webhook controller to process incoming activities.
-     */
     public void processActivity(String userId, String conversationId,
                                String text, Map<String, Object> metadata) {
         InboundMessage msg = new InboundMessage("teams", userId, conversationId,
                 null, text, metadata, java.time.Instant.now());
         messageSink.tryEmitNext(msg);
+    }
+
+    private Mono<String> getAccessToken() {
+        CachedToken current = cachedToken.get();
+        if (current != null && current.isValid()) {
+            return Mono.just(current.token());
+        }
+
+        return tokenClient.post()
+                .uri(LOGIN_URL)
+                .body(BodyInserters.fromFormData("grant_type", "client_credentials")
+                        .with("client_id", appId)
+                        .with("client_secret", secretsConfig.getTeamsAppPassword())
+                        .with("scope", "https://api.botframework.com/.default"))
+                .retrieve()
+                .bodyToMono(Map.class)
+                .map(response -> {
+                    String token = (String) response.get("access_token");
+                    int expiresIn = (int) response.getOrDefault("expires_in", 3600);
+                    Instant expiresAt = Instant.now().plusSeconds(expiresIn).minus(TOKEN_REFRESH_BUFFER);
+                    CachedToken newToken = new CachedToken(token, expiresAt);
+                    cachedToken.set(newToken);
+                    log.debug("Teams OAuth token acquired, expires at {}", expiresAt);
+                    return token;
+                });
+    }
+
+    private record CachedToken(String token, Instant expiresAt) {
+        boolean isValid() {
+            return token != null && Instant.now().isBefore(expiresAt);
+        }
     }
 }

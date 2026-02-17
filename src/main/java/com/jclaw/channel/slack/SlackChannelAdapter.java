@@ -19,6 +19,7 @@ import reactor.core.publisher.Sinks;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 @Component
@@ -57,11 +58,17 @@ public class SlackChannelAdapter implements ChannelAdapter {
                 var event = payload.getEvent();
                 if (event.getBotId() != null) return ctx.ack(); // skip bot messages
 
+                Map<String, Object> metadata = new HashMap<>();
+                metadata.put("team", event.getTeam() != null ? event.getTeam() : "");
+                // Check if message contains @mentions
+                if (event.getText() != null && event.getText().contains("<@")) {
+                    metadata.put("mentioned", true);
+                }
+
                 InboundMessage msg = new InboundMessage(
                         "slack", event.getUser(), event.getChannel(),
                         event.getThreadTs(), event.getText(),
-                        Map.of("team", event.getTeam() != null ? event.getTeam() : ""),
-                        java.time.Instant.now());
+                        metadata, java.time.Instant.now());
                 messageSink.tryEmitNext(msg);
                 return ctx.ack();
             });
@@ -69,11 +76,18 @@ public class SlackChannelAdapter implements ChannelAdapter {
             // Handle app mentions
             slackApp.event(com.slack.api.model.event.AppMentionEvent.class, (payload, ctx) -> {
                 var event = payload.getEvent();
+                Map<String, Object> metadata = new HashMap<>();
+                metadata.put("mentioned", true);
+                metadata.put("team", event.getChannel() != null ? "" : "");
+                // AppMentionEvent doesn't directly expose team, extract from context
+                if (payload.getTeamId() != null) {
+                    metadata.put("team", payload.getTeamId());
+                }
+
                 InboundMessage msg = new InboundMessage(
                         "slack", event.getUser(), event.getChannel(),
                         event.getThreadTs(), event.getText(),
-                        Map.of("mentioned", true),
-                        java.time.Instant.now());
+                        metadata, java.time.Instant.now());
                 messageSink.tryEmitNext(msg);
                 return ctx.ack();
             });

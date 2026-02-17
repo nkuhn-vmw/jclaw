@@ -6,15 +6,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
-import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Map;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledFuture;
 
 @Component
 @JclawTool(
@@ -27,11 +27,10 @@ public class ScheduledTaskTool implements ToolCallback {
 
     private static final Logger log = LoggerFactory.getLogger(ScheduledTaskTool.class);
 
-    private final TaskScheduler taskScheduler;
-    private final Map<String, ScheduledFuture<?>> activeTasks = new ConcurrentHashMap<>();
+    private final ScheduledTaskRepository taskRepository;
 
-    public ScheduledTaskTool(TaskScheduler taskScheduler) {
-        this.taskScheduler = taskScheduler;
+    public ScheduledTaskTool(ScheduledTaskRepository taskRepository) {
+        this.taskRepository = taskRepository;
     }
 
     @Override
@@ -56,43 +55,86 @@ public class ScheduledTaskTool implements ToolCallback {
             return "{\"error\": \"name and cron are required for task creation\"}";
         }
 
-        String taskId = UUID.randomUUID().toString().substring(0, 8);
         try {
-            ScheduledFuture<?> future = taskScheduler.schedule(
-                () -> log.info("Scheduled task fired: id={} name={} message={}", taskId, name, message),
-                new CronTrigger(cron)
-            );
-            activeTasks.put(taskId, future);
-            log.info("Scheduled task created: id={} name={} cron={}", taskId, name, cron);
-            return String.format("{\"taskId\":\"%s\",\"name\":\"%s\",\"cron\":\"%s\",\"status\":\"scheduled\"}",
-                    taskId, name, cron);
+            CronExpression cronExpr = CronExpression.parse(cron);
+            Instant nextFire = cronExpr.next(Instant.now().atZone(ZoneOffset.UTC).toLocalDateTime())
+                    .atZone(ZoneOffset.UTC).toInstant();
+
+            ScheduledTask task = new ScheduledTask(name, cron, message, null, null);
+            task.setNextFireAt(nextFire);
+            ScheduledTask saved = taskRepository.save(task);
+
+            log.info("Scheduled task created: id={} name={} cron={}", saved.getId(), name, cron);
+            return String.format(
+                    "{\"taskId\":\"%s\",\"name\":\"%s\",\"cron\":\"%s\",\"nextFireAt\":\"%s\",\"status\":\"scheduled\"}",
+                    saved.getId(), name, cron, nextFire);
         } catch (IllegalArgumentException e) {
             return "{\"error\": \"Invalid cron expression: " + cron + "\"}";
         }
     }
 
+    @Transactional
     private String cancelTask(String toolInput) {
         String taskId = extractField(toolInput, "taskId");
         if (taskId == null) return "{\"error\": \"taskId required\"}";
 
-        ScheduledFuture<?> future = activeTasks.remove(taskId);
-        if (future == null) return "{\"error\": \"Task not found: " + taskId + "\"}";
-
-        future.cancel(false);
-        return String.format("{\"taskId\":\"%s\",\"status\":\"cancelled\"}", taskId);
+        try {
+            UUID id = UUID.fromString(taskId);
+            return taskRepository.findById(id)
+                    .map(task -> {
+                        task.setStatus(ScheduledTask.TaskStatus.CANCELLED);
+                        taskRepository.save(task);
+                        return String.format("{\"taskId\":\"%s\",\"status\":\"cancelled\"}", taskId);
+                    })
+                    .orElse("{\"error\": \"Task not found: " + taskId + "\"}");
+        } catch (IllegalArgumentException e) {
+            return "{\"error\": \"Invalid task ID: " + taskId + "\"}";
+        }
     }
 
     private String listTasks() {
+        List<ScheduledTask> tasks = taskRepository.findByStatus(ScheduledTask.TaskStatus.ACTIVE);
         StringBuilder sb = new StringBuilder("[");
         boolean first = true;
-        for (Map.Entry<String, ScheduledFuture<?>> entry : activeTasks.entrySet()) {
+        for (ScheduledTask task : tasks) {
             if (!first) sb.append(",");
             first = false;
-            sb.append(String.format("{\"taskId\":\"%s\",\"cancelled\":%s}",
-                    entry.getKey(), entry.getValue().isCancelled()));
+            sb.append(String.format(
+                    "{\"taskId\":\"%s\",\"name\":\"%s\",\"cron\":\"%s\",\"nextFireAt\":\"%s\"}",
+                    task.getId(), task.getName(), task.getCronExpression(),
+                    task.getNextFireAt() != null ? task.getNextFireAt() : ""));
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    /**
+     * Polls for due tasks every minute and executes them.
+     */
+    @Scheduled(fixedRate = 60000)
+    @Transactional
+    public void pollDueTasks() {
+        List<ScheduledTask> dueTasks = taskRepository
+                .findByStatusAndNextFireAtBefore(ScheduledTask.TaskStatus.ACTIVE, Instant.now());
+
+        for (ScheduledTask task : dueTasks) {
+            log.info("Scheduled task fired: id={} name={} message={}",
+                    task.getId(), task.getName(), task.getMessage());
+            task.setLastFiredAt(Instant.now());
+
+            // Calculate next fire time
+            try {
+                CronExpression cronExpr = CronExpression.parse(task.getCronExpression());
+                Instant nextFire = cronExpr.next(Instant.now().atZone(ZoneOffset.UTC).toLocalDateTime())
+                        .atZone(ZoneOffset.UTC).toInstant();
+                task.setNextFireAt(nextFire);
+            } catch (IllegalArgumentException e) {
+                log.error("Invalid cron expression for task {}: {}", task.getId(), task.getCronExpression());
+                task.setStatus(ScheduledTask.TaskStatus.CANCELLED);
+            }
+
+            taskRepository.save(task);
+        }
     }
 
     @Override

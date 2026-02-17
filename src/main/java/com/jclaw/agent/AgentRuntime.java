@@ -3,16 +3,16 @@ package com.jclaw.agent;
 import com.jclaw.audit.AuditService;
 import com.jclaw.channel.InboundMessage;
 import com.jclaw.content.ContentFilterChain;
+import com.jclaw.observability.JclawMetrics;
 import com.jclaw.session.MessageRole;
 import com.jclaw.session.Session;
 import com.jclaw.session.SessionManager;
 import com.jclaw.tool.ToolRegistry;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -24,7 +24,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class AgentRuntime {
@@ -38,7 +38,8 @@ public class AgentRuntime {
     private final ContentFilterChain contentFilterChain;
     private final AgentConfigService agentConfigService;
     private final AuditService auditService;
-    private final MeterRegistry meterRegistry;
+    private final JclawMetrics metrics;
+    private final ChatClient.Builder chatClientBuilder;
 
     public AgentRuntime(ModelRouter modelRouter,
                        ToolRegistry toolRegistry,
@@ -47,7 +48,8 @@ public class AgentRuntime {
                        ContentFilterChain contentFilterChain,
                        AgentConfigService agentConfigService,
                        AuditService auditService,
-                       MeterRegistry meterRegistry) {
+                       JclawMetrics metrics,
+                       ChatClient.Builder chatClientBuilder) {
         this.modelRouter = modelRouter;
         this.toolRegistry = toolRegistry;
         this.sessionManager = sessionManager;
@@ -55,7 +57,8 @@ public class AgentRuntime {
         this.contentFilterChain = contentFilterChain;
         this.agentConfigService = agentConfigService;
         this.auditService = auditService;
-        this.meterRegistry = meterRegistry;
+        this.metrics = metrics;
+        this.chatClientBuilder = chatClientBuilder;
     }
 
     public Flux<AgentResponse> processMessage(AgentContext context, InboundMessage message) {
@@ -63,6 +66,9 @@ public class AgentRuntime {
             MDC.put("agentId", context.agentId());
             MDC.put("principal", context.principal());
             MDC.put("channelType", context.channelType());
+
+            // Record inbound message metric
+            metrics.recordMessageReceived(context.channelType(), context.agentId());
 
             // 1. Resolve session
             Session session = sessionManager.resolveSession(context, message);
@@ -87,34 +93,68 @@ public class AgentRuntime {
         })
         .subscribeOn(Schedulers.boundedElastic())
         .flatMapMany(ctx -> {
-            Timer.Sample sample = Timer.start(meterRegistry);
+            Timer.Sample sample = metrics.startLlmTimer();
+            String modelName = ctx.config().getModel() != null ? ctx.config().getModel() : "default";
 
-            // 6. Execute streaming LLM call
+            // Record LLM request metric
+            metrics.recordLlmRequest(modelName, context.agentId());
+
+            // 6. Build ChatClient from the resolved model
             ChatClient chatClient = ChatClient.builder(ctx.model()).build();
-            ChatClient.ChatClientRequestSpec spec = chatClient.prompt(ctx.prompt());
+
+            // 7. Configure request with maxTokens from agent config
+            ChatClient.ChatClientRequestSpec spec = chatClient.prompt(ctx.prompt())
+                    .options(AnthropicChatOptions.builder()
+                            .maxTokens(ctx.config().getMaxTokensPerRequest())
+                            .build());
             if (!ctx.tools().isEmpty()) {
                 spec = spec.tools(ctx.tools());
             }
 
+            // Track tool calls and accumulated response
+            AtomicInteger toolCallCount = new AtomicInteger(0);
+            int maxToolCalls = ctx.config().getMaxToolCalls();
+            StringBuilder responseAccumulator = new StringBuilder();
+
             return spec.stream().chatResponse()
                 .map(chatResponse -> {
+                    // Extract token usage from response metadata
+                    extractAndRecordTokenUsage(chatResponse, modelName, context.agentId());
+
+                    // Count tool calls and enforce limit
+                    if (chatResponse.getResult() != null
+                            && chatResponse.getResult().getOutput() != null
+                            && chatResponse.getResult().getOutput().getToolCalls() != null
+                            && !chatResponse.getResult().getOutput().getToolCalls().isEmpty()) {
+                        int count = toolCallCount.addAndGet(
+                                chatResponse.getResult().getOutput().getToolCalls().size());
+                        if (count > maxToolCalls) {
+                            log.warn("Agent {} exceeded max tool calls ({}/{})",
+                                    context.agentId(), count, maxToolCalls);
+                            throw new MaxToolCallsExceededException(
+                                    "Max tool calls exceeded: " + count + "/" + maxToolCalls);
+                        }
+                    }
+
                     String text = chatResponse.getResult() != null
                             && chatResponse.getResult().getOutput() != null
                             ? chatResponse.getResult().getOutput().getText()
                             : "";
+                    if (text != null && !text.isEmpty()) {
+                        responseAccumulator.append(text);
+                    }
                     return new AgentResponse(text != null ? text : "");
                 })
                 .filter(response -> response.content() != null && !response.content().isEmpty())
                 .doOnComplete(() -> {
-                    sample.stop(Timer.builder("jclaw.llm.latency")
-                            .tag("agent", context.agentId())
-                            .tag("model", ctx.config().getModel() != null ? ctx.config().getModel() : "default")
-                            .register(meterRegistry));
-                    Counter.builder("jclaw.messages.processed")
-                            .tag("channel", context.channelType())
-                            .tag("agent", context.agentId())
-                            .tag("outcome", "success")
-                            .register(meterRegistry).increment();
+                    metrics.stopLlmTimer(sample, modelName, context.agentId());
+
+                    // Store assistant response in session
+                    String fullResponse = responseAccumulator.toString();
+                    if (!fullResponse.isEmpty()) {
+                        sessionManager.addMessage(ctx.session().getId(), MessageRole.ASSISTANT,
+                                fullResponse, estimateTokens(fullResponse));
+                    }
 
                     auditService.logSessionEvent("MESSAGE_PROCESSED", context.principal(),
                             context.agentId(), ctx.session().getId(), "Message processed");
@@ -124,19 +164,36 @@ public class AgentRuntime {
         .onErrorResume(e -> {
             log.error("Error processing message for agent={} principal={}",
                     context.agentId(), context.principal(), e);
-            Counter.builder("jclaw.messages.processed")
-                    .tag("channel", context.channelType())
-                    .tag("agent", context.agentId())
-                    .tag("outcome", "error")
-                    .register(meterRegistry).increment();
             MDC.clear();
             return Flux.just(new AgentResponse(
                     "I encountered an error processing your request. Please try again."));
         });
     }
 
+    private void extractAndRecordTokenUsage(ChatResponse chatResponse, String model, String agent) {
+        if (chatResponse == null || chatResponse.getMetadata() == null) return;
+        var usage = chatResponse.getMetadata().getUsage();
+        if (usage == null) return;
+
+        long inputTokens = usage.getPromptTokens();
+        long outputTokens = usage.getCompletionTokens();
+
+        if (inputTokens > 0) {
+            metrics.recordLlmTokensInput(model, agent, inputTokens);
+        }
+        if (outputTokens > 0) {
+            metrics.recordLlmTokensOutput(model, agent, outputTokens);
+        }
+    }
+
     private int estimateTokens(String text) {
         return text != null ? text.length() / 4 : 0;
+    }
+
+    public static class MaxToolCallsExceededException extends RuntimeException {
+        public MaxToolCallsExceededException(String message) {
+            super(message);
+        }
     }
 
     private record LlmCallContext(

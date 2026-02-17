@@ -54,7 +54,7 @@ public class ChannelRouter {
                                 msg.channelType(), msg.channelUserId(), e);
                         return Mono.empty();
                     }))
-                .retry() // Resubscribe on terminal errors from the adapter stream
+                .retry()
                 .subscribe(
                     result -> log.debug("Message routed: {}", result),
                     error -> log.error("Fatal error in routing for adapter={}", adapter.channelType(), error)
@@ -64,23 +64,28 @@ public class ChannelRouter {
     }
 
     private Mono<Void> routeMessage(InboundMessage message) {
-        // CH-2: Resolve agent with workspace/channel-ID filtering
         String agentId = resolveAgent(message);
 
-        // CH-1: Enforce activation mode
         if (!isActivationSatisfied(message, agentId)) {
             log.debug("Message from channel={} does not satisfy activation mode for agent={}",
                     message.channelType(), agentId);
             return Mono.empty();
         }
 
-        // CH-3: Identity mapping gate — requires approved identity
-        return identityMappingService.resolvePrincipal(
-                message.channelType(), message.channelUserId())
+        // Bypass identity mapping for WebChat users (already SSO-authenticated)
+        Mono<String> principalMono;
+        if ("webchat".equals(message.channelType())) {
+            // WebChat users provide their principal directly via channelUserId (SSO identity)
+            principalMono = Mono.just(message.channelUserId());
+        } else {
+            principalMono = identityMappingService.resolvePrincipal(
+                    message.channelType(), message.channelUserId());
+        }
+
+        return principalMono
             .flatMap(principal -> {
                 AgentContext context = new AgentContext(agentId, principal, message.channelType());
 
-                // CH-4: Invoke content filter chain
                 try {
                     contentFilterChain.filterInbound(message, context);
                 } catch (ContentFilterChain.ContentFilterException e) {
@@ -91,11 +96,9 @@ public class ChannelRouter {
                     return Mono.empty();
                 }
 
-                // Audit: log message routing
                 auditService.logSessionEvent("MESSAGE_ROUTED", principal, agentId, null,
                         "Message routed from " + message.channelType());
 
-                // Send typing indicator
                 ChannelAdapter adapter = adapters.get(message.channelType());
                 Mono<Void> typingIndicator = adapter != null
                         ? adapter.sendTypingIndicator(message.conversationId())
@@ -111,15 +114,31 @@ public class ChannelRouter {
                                     .map(r -> r.content())
                                     .collect(Collectors.joining(""));
                             if (adapter == null) return Mono.empty();
+
+                            // Propagate threadId from inbound to outbound message
                             return adapter.sendMessage(
                                     new OutboundMessage(message.channelType(),
-                                            message.conversationId(), combined));
+                                            message.conversationId(),
+                                            message.threadId(),
+                                            combined, Map.of()));
                         })
                 );
             })
             .onErrorResume(IdentityMappingService.UnmappedIdentityException.class, e -> {
                 log.warn("Unmapped identity: channel={} user={}", message.channelType(),
                         message.channelUserId());
+
+                // Queue unmapped identity for later approval instead of dropping
+                identityMappingService.createMapping(
+                        message.channelType(),
+                        message.channelUserId(),
+                        message.channelUserId(),
+                        null);
+
+                auditService.logSessionEvent("UNMAPPED_IDENTITY_QUEUED", message.channelUserId(),
+                        null, null, "Unmapped identity queued for approval: "
+                                + message.channelType() + ":" + message.channelUserId());
+
                 return Mono.empty();
             })
             .onErrorResume(e -> {
@@ -129,9 +148,6 @@ public class ChannelRouter {
             });
     }
 
-    /**
-     * CH-2: Resolve agent based on channel type, workspace, and channel-ID filtering.
-     */
     private String resolveAgent(InboundMessage message) {
         List<JclawProperties.AgentProperties> agents = properties.getAgents();
         if (agents == null || agents.isEmpty()) return "default";
@@ -142,14 +158,11 @@ public class ChannelRouter {
         return agents.stream()
                 .filter(a -> a.getChannels() != null && a.getChannels().stream()
                         .anyMatch(ch -> {
-                            // Match channel type
                             if (!ch.getType().equals(message.channelType())) return false;
-                            // Match workspace if specified
                             if (ch.getWorkspace() != null && !ch.getWorkspace().isEmpty()
                                     && workspace != null && !ch.getWorkspace().equals(workspace)) {
                                 return false;
                             }
-                            // Match specific channel IDs if specified
                             if (ch.getChannels() != null && !ch.getChannels().isEmpty()) {
                                 return ch.getChannels().contains(message.conversationId());
                             }
@@ -160,10 +173,6 @@ public class ChannelRouter {
                 .orElse("default");
     }
 
-    /**
-     * CH-1: Check if the message satisfies the activation mode for the resolved agent.
-     * Modes: ALWAYS (process all), MENTION (only when @mentioned), DM (only direct messages).
-     */
     private boolean isActivationSatisfied(InboundMessage message, String agentId) {
         List<JclawProperties.AgentProperties> agents = properties.getAgents();
         if (agents == null || agents.isEmpty()) return true;
@@ -177,18 +186,16 @@ public class ChannelRouter {
                     String activation = binding.getActivation();
                     if (activation == null || "ALWAYS".equalsIgnoreCase(activation)) return true;
                     if ("MENTION".equalsIgnoreCase(activation)) {
-                        // Check if the message contains a mention
                         return message.metadata() != null
                                 && Boolean.TRUE.equals(message.metadata().get("mentioned"));
                     }
                     if ("DM".equalsIgnoreCase(activation)) {
-                        // Check if it's a direct message
                         return message.metadata() != null
                                 && Boolean.TRUE.equals(message.metadata().get("isDm"));
                     }
                     return true;
                 })
-                .orElse(true); // Default to always if no binding found
+                .orElse(true);
     }
 
     public ChannelAdapter getAdapter(String channelType) {

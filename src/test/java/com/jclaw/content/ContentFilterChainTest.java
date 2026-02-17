@@ -3,6 +3,8 @@ package com.jclaw.content;
 import com.jclaw.agent.AgentContext;
 import com.jclaw.audit.AuditService;
 import com.jclaw.channel.InboundMessage;
+import com.jclaw.observability.JclawMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +21,8 @@ class ContentFilterChainTest {
     @Mock
     private AuditService auditService;
 
+    private final JclawMetrics metrics = new JclawMetrics(new SimpleMeterRegistry());
+
     private ContentFilterChain filterChain;
     private AgentContext context;
 
@@ -27,7 +31,7 @@ class ContentFilterChainTest {
         filterChain = new ContentFilterChain(
                 List.of(new InputSanitizer(), new PatternDetector(),
                         new InstructionDetector(), new EgressGuard()),
-                auditService);
+                auditService, metrics);
         context = new AgentContext("test-agent", "user@example.com", "rest-api");
     }
 
