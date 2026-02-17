@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/jclaw
+    username: ${DB_USERNAME:jclaw}
+    password: ${DB_PASSWORD:jclaw}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  security:
+    oauth2:
+      client:
+        registration:
+          sso:
+            client-id: ${SSO_CLIENT_ID:jclaw-local}
+            client-secret: ${SSO_CLIENT_SECRET:jclaw-local-secret}
+            scope: openid,profile,email,roles,jclaw.admin,jclaw.user
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          sso:
+            issuer-uri: ${SSO_ISSUER_URI:http://localhost:9000}
+      resourceserver:
+        jwt:
+          issuer-uri: ${SSO_ISSUER_URI:http://localhost:9000}
+  jpa:
+    hibernate:
+      ddl-auto: update
+  flyway:
+    enabled: true
+
+jclaw:
+  genai:
+    api-base: ${GENAI_API_BASE:https://api.anthropic.com}
+    api-key: ${GENAI_API_KEY:}
+    model: ${GENAI_MODEL:claude-sonnet-4-20250514}
+
+logging:
+  level:
+    com.jclaw: DEBUG

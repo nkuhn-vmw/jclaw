@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- PII redaction converter -->
+    <conversionRule conversionWord="piiMsg"
+                    converterClass="com.jclaw.observability.PiiRedactionConverter"/>
+
+    <!-- Console appender for local development -->
+    <springProfile name="local">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.jclaw" level="DEBUG"/>
+    </springProfile>
+
+    <!-- JSON structured logging for cloud deployment with PII redaction -->
+    <springProfile name="cloud">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>sessionId</includeMdcKeyName>
+                <includeMdcKeyName>agentId</includeMdcKeyName>
+                <includeMdcKeyName>channelType</includeMdcKeyName>
+                <includeMdcKeyName>principal</includeMdcKeyName>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="JSON"/>
+        </root>
+        <logger name="com.jclaw" level="INFO"/>
+    </springProfile>
+
+    <!-- Test profile -->
+    <springProfile name="test">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+</configuration>

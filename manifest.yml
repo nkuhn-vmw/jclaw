@@ -1,0 +1,24 @@
+---
+applications:
+- name: jclaw
+  memory: 1G
+  instances: 2
+  buildpacks:
+    - java_buildpack_offline
+  path: build/libs/jclaw-1.0.0-SNAPSHOT.jar
+  env:
+    JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
+    SPRING_PROFILES_ACTIVE: cloud
+    JCLAW_ADMIN_ALLOWED_ORIGINS: https://jclaw.apps.example.com
+  services:
+    - jclaw-genai
+    - jclaw-sso
+    - jclaw-db
+    - jclaw-cache
+    - jclaw-secrets
+  routes:
+    - route: jclaw.apps.example.com
+    - route: jclaw-webhooks.apps.example.com
+  health-check-type: http
+  health-check-http-endpoint: /actuator/health
+  timeout: 120

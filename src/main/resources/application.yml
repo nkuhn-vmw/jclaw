@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: jclaw
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+
+jclaw:
+  session:
+    default-scope: MAIN
+    group-scope: GROUP
+    max-history-tokens: 128000
+    compaction-threshold-tokens: 96000
+    idle-timeout-minutes: 1440
+  security:
+    data-retention:
+      session-transcripts-days: 90
+      audit-log-days: 365
+      content-filter-events-days: 30
+    pii:
+      redact-in-logs: true
+      redact-patterns:
+        - "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+        - "\\b\\d{16}\\b"
+        - "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+    data-residency:
+      region: us
+  agents: []

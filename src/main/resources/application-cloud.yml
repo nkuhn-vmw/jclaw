@@ -1,0 +1,10 @@
+spring:
+  profiles:
+    active: cloud
+  datasource:
+    # Auto-configured by java-cfenv from VCAP_SERVICES postgres binding
+  redis:
+    # Auto-configured by java-cfenv from VCAP_SERVICES redis binding
+  security:
+    oauth2:
+      # Auto-configured by java-cfenv-boot-pivotal-sso from VCAP_SERVICES p-identity binding

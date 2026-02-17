@@ -1,0 +1,65 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  security:
+    oauth2:
+      client:
+        registration:
+          jclaw-sso:
+            client-id: test-client
+            client-secret: test-secret
+            scope: openid,jclaw.user
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          jclaw-sso:
+            authorization-uri: http://localhost:9000/authorize
+            token-uri: http://localhost:9000/token
+            jwk-set-uri: http://localhost:9000/.well-known/jwks.json
+            user-info-uri: http://localhost:9000/userinfo
+            user-name-attribute: user_name
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9000
+          jwk-set-uri: http://localhost:9000/.well-known/jwks.json
+
+jclaw:
+  genai:
+    api-base: http://localhost:8089
+    api-key: test-key
+    model: test-model
+  session:
+    default-scope: MAIN
+    compaction-threshold-tokens: 1000
+    idle-timeout-minutes: 60
+  security:
+    data-retention:
+      session-transcripts-days: 7
+      audit-log-days: 30
+      content-filter-events-days: 7
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+logging:
+  level:
+    com.jclaw: WARN
