@@ -78,9 +78,17 @@ public class AdminApiController {
                                           Authentication auth) {
         String jclawPrincipal = body != null ? body.get("jclawPrincipal") : null;
         if (jclawPrincipal == null || jclawPrincipal.isBlank()) {
+            auditService.logAuth(auth.getName(), "IDENTITY_MAPPING_APPROVE:" + id,
+                    "FAILED", "Missing jclawPrincipal");
             throw new IllegalArgumentException("jclawPrincipal is required for approval");
         }
-        return identityMappingService.approveMapping(id, auth.getName(), jclawPrincipal);
+        try {
+            return identityMappingService.approveMapping(id, auth.getName(), jclawPrincipal);
+        } catch (Exception e) {
+            auditService.logAuth(auth.getName(), "IDENTITY_MAPPING_APPROVE:" + id,
+                    "FAILED", e.getMessage());
+            throw e;
+        }
     }
 
     // --- Sessions ---

@@ -38,12 +38,10 @@ public class ToolPolicy {
             return false;
         }
 
-        // Explicit allow list overrides default tool routing (within trust-level ceiling above)
-        boolean explicitlyAllowed = agentConfig.getAllowedTools() != null
-                && !agentConfig.getAllowedTools().isEmpty()
-                && agentConfig.getAllowedTools().contains(toolName);
-        if (explicitlyAllowed) {
-            return true;
+        // When an explicit allow-list is configured, only tools in the list are permitted
+        // (within the trust-level ceiling already enforced above)
+        if (agentConfig.getAllowedTools() != null && !agentConfig.getAllowedTools().isEmpty()) {
+            return agentConfig.getAllowedTools().contains(toolName);
         }
 
         return true;

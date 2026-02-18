@@ -34,6 +34,10 @@ public class DataQueryTool implements ToolCallback {
             "audit_log", "identity_mappings", "sessions", "session_messages",
             "agent_configs", "agent_allowed_tools", "agent_denied_tools",
             "agent_egress_allowlist", "scheduled_tasks", "flyway_schema_history");
+    private static final Set<String> BLOCKED_SCHEMAS = Set.of(
+            "information_schema", "pg_catalog", "pg_tables", "pg_views",
+            "pg_columns", "pg_stat", "sys.tables", "sys.columns",
+            "all_tables", "all_tab_columns", "dba_tables");
 
     private final DataSource dataSource;
 
@@ -72,8 +76,16 @@ public class DataQueryTool implements ToolCallback {
             return "{\"error\": \"Query contains disallowed SQL keywords\"}";
         }
 
-        // Block queries against jclaw internal tables
+        // Block queries against database catalog/metadata schemas
         String lowerQuery = withoutStrings.toLowerCase();
+        for (String schema : BLOCKED_SCHEMAS) {
+            if (lowerQuery.contains(schema)) {
+                log.warn("Rejected query referencing catalog/metadata schema {}: {}", schema, query);
+                return "{\"error\": \"Queries against database catalog schemas are not allowed\"}";
+            }
+        }
+
+        // Block queries against jclaw internal tables
         for (String table : INTERNAL_TABLES) {
             if (lowerQuery.contains(table)) {
                 log.warn("Rejected query referencing internal table {}: {}", table, query);

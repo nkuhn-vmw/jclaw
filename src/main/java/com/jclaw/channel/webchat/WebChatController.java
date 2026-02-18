@@ -40,9 +40,7 @@ public class WebChatController {
     public Map<String, String> sendMessage(@RequestBody Map<String, String> body,
                                            Authentication auth) {
         String text = body.get("message");
-        // Always generate conversationId server-side to prevent hijacking
-        String conversationId = body.getOrDefault("conversationId",
-                UUID.randomUUID().toString());
+        String clientConversationId = body.get("conversationId");
 
         if (text == null || text.isBlank()) {
             return Map.of("error", "message is required");
@@ -54,7 +52,6 @@ public class WebChatController {
         if (conversationOwners.size() >= MAX_CONVERSATION_OWNERS) {
             log.warn("Conversation owners cache full ({} entries), evicting oldest entries",
                     conversationOwners.size());
-            // Remove ~10% of entries to avoid thrashing
             var iterator = conversationOwners.entrySet().iterator();
             int toRemove = MAX_CONVERSATION_OWNERS / 10;
             while (iterator.hasNext() && toRemove-- > 0) {
@@ -63,10 +60,14 @@ public class WebChatController {
             }
         }
 
-        // Register ownership: first user to use a conversationId owns it
-        conversationOwners.putIfAbsent(conversationId, userId);
-        if (!userId.equals(conversationOwners.get(conversationId))) {
-            return Map.of("error", "conversationId belongs to another user");
+        // Determine conversationId: accept client-supplied only if already owned by this user;
+        // otherwise always generate server-side to prevent hijacking/guessing
+        String conversationId;
+        if (clientConversationId != null && userId.equals(conversationOwners.get(clientConversationId))) {
+            conversationId = clientConversationId;
+        } else {
+            conversationId = UUID.randomUUID().toString();
+            conversationOwners.put(conversationId, userId);
         }
 
         webChatAdapter.publishMessage(userId, conversationId, text);

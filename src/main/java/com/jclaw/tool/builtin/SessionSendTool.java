@@ -23,6 +23,7 @@ import java.util.UUID;
 public class SessionSendTool implements ToolCallback {
 
     private static final Logger log = LoggerFactory.getLogger(SessionSendTool.class);
+    private static final int MAX_MESSAGE_LENGTH = 10_000;
 
     private final SessionManager sessionManager;
 
@@ -37,6 +38,10 @@ public class SessionSendTool implements ToolCallback {
 
         if (sessionIdStr == null || message == null) {
             return "{\"error\": \"sessionId and message are required\"}";
+        }
+
+        if (message.length() > MAX_MESSAGE_LENGTH) {
+            return "{\"error\": \"Message exceeds maximum length of " + MAX_MESSAGE_LENGTH + " characters\"}";
         }
 
         try {
