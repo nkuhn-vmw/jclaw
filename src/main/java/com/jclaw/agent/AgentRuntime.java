@@ -24,6 +24,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
@@ -121,34 +122,9 @@ public class AgentRuntime {
             StringBuilder responseAccumulator = new StringBuilder();
 
             return spec.stream().chatResponse()
-                .map(chatResponse -> {
-                    // Extract token usage from response metadata
-                    extractAndRecordTokenUsage(chatResponse, modelName, context.agentId());
-
-                    // Count tool calls and enforce limit
-                    if (chatResponse.getResult() != null
-                            && chatResponse.getResult().getOutput() != null
-                            && chatResponse.getResult().getOutput().getToolCalls() != null
-                            && !chatResponse.getResult().getOutput().getToolCalls().isEmpty()) {
-                        int count = toolCallCount.addAndGet(
-                                chatResponse.getResult().getOutput().getToolCalls().size());
-                        if (count > maxToolCalls) {
-                            log.warn("Agent {} exceeded max tool calls ({}/{})",
-                                    context.agentId(), count, maxToolCalls);
-                            throw new MaxToolCallsExceededException(
-                                    "Max tool calls exceeded: " + count + "/" + maxToolCalls);
-                        }
-                    }
-
-                    String text = chatResponse.getResult() != null
-                            && chatResponse.getResult().getOutput() != null
-                            ? chatResponse.getResult().getOutput().getText()
-                            : "";
-                    if (text != null && !text.isEmpty()) {
-                        responseAccumulator.append(text);
-                    }
-                    return new AgentResponse(text != null ? text : "");
-                })
+                .map(chatResponse -> toAgentResponse(
+                        chatResponse, modelName, context.agentId(),
+                        toolCallCount, maxToolCalls, responseAccumulator))
                 .filter(response -> response.content() != null && !response.content().isEmpty())
                 .doOnComplete(() -> {
                     metrics.stopLlmTimer(sample, modelName, context.agentId());
@@ -175,6 +151,43 @@ public class AgentRuntime {
             return Flux.just(new AgentResponse(
                     "I encountered an error processing your request. Please try again."));
         });
+    }
+
+    private AgentResponse toAgentResponse(ChatResponse chatResponse, String modelName,
+                                          String agentId, AtomicInteger toolCallCount,
+                                          int maxToolCalls, StringBuilder responseAccumulator) {
+        extractAndRecordTokenUsage(chatResponse, modelName, agentId);
+
+        // Count tool calls and enforce limit
+        if (chatResponse.getResult() != null
+                && chatResponse.getResult().getOutput() != null
+                && chatResponse.getResult().getOutput().getToolCalls() != null
+                && !chatResponse.getResult().getOutput().getToolCalls().isEmpty()) {
+            int count = toolCallCount.addAndGet(
+                    chatResponse.getResult().getOutput().getToolCalls().size());
+            if (count > maxToolCalls) {
+                log.warn("Agent {} exceeded max tool calls ({}/{})", agentId, count, maxToolCalls);
+                throw new MaxToolCallsExceededException(
+                        "Max tool calls exceeded: " + count + "/" + maxToolCalls);
+            }
+        }
+
+        String text = chatResponse.getResult() != null
+                && chatResponse.getResult().getOutput() != null
+                ? chatResponse.getResult().getOutput().getText()
+                : "";
+        if (text != null && !text.isEmpty()) {
+            responseAccumulator.append(text);
+        }
+
+        // Populate finishReason from response (ART-012)
+        String finishReason = "stop";
+        if (chatResponse.getResult() != null && chatResponse.getResult().getMetadata() != null
+                && chatResponse.getResult().getMetadata().getFinishReason() != null) {
+            finishReason = chatResponse.getResult().getMetadata().getFinishReason();
+        }
+
+        return new AgentResponse(text != null ? text : "", finishReason, Map.of());
     }
 
     private void extractAndRecordTokenUsage(ChatResponse chatResponse, String model, String agent) {

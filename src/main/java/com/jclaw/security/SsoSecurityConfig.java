@@ -7,7 +7,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
@@ -20,12 +19,15 @@ public class SsoSecurityConfig {
     private final AuditLogFilter auditLogFilter;
     private final RateLimitFilter rateLimitFilter;
     private final ChannelWebhookAuthFilter channelWebhookAuthFilter;
+    private final JwtAuthenticationConverter jwtConverter;
 
     public SsoSecurityConfig(AuditLogFilter auditLogFilter, RateLimitFilter rateLimitFilter,
-                             ChannelWebhookAuthFilter channelWebhookAuthFilter) {
+                             ChannelWebhookAuthFilter channelWebhookAuthFilter,
+                             JwtAuthenticationConverter jwtConverter) {
         this.auditLogFilter = auditLogFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.channelWebhookAuthFilter = channelWebhookAuthFilter;
+        this.jwtConverter = jwtConverter;
     }
 
     @Bean
@@ -36,7 +38,7 @@ public class SsoSecurityConfig {
                         .failureUrl("/login?error=true")
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jclawJwtConverter()))
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
@@ -67,15 +69,4 @@ public class SsoSecurityConfig {
                 .build();
     }
 
-    @Bean
-    public JwtAuthenticationConverter jclawJwtConverter() {
-        JwtGrantedAuthoritiesConverter grantedAuthorities = new JwtGrantedAuthoritiesConverter();
-        grantedAuthorities.setAuthoritiesClaimName("scope");
-        grantedAuthorities.setAuthorityPrefix("SCOPE_");
-
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(grantedAuthorities);
-        converter.setPrincipalClaimName("user_name");
-        return converter;
-    }
 }

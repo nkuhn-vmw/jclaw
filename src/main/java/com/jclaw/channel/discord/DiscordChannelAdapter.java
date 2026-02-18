@@ -47,7 +47,9 @@ public class DiscordChannelAdapter extends ListenerAdapter implements ChannelAda
             }
 
             jda = JDABuilder.createDefault(token)
-                    .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
+                    .enableIntents(GatewayIntent.MESSAGE_CONTENT,
+                            GatewayIntent.GUILD_MESSAGES,
+                            GatewayIntent.DIRECT_MESSAGES)
                     .addEventListeners(this)
                     .build();
             log.info("Discord channel adapter initialized");

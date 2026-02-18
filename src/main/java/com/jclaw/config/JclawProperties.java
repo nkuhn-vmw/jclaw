@@ -128,6 +128,7 @@ public class JclawProperties {
         private String trustLevel = "STANDARD";
         private String systemPromptRef;
         private List<String> allowedTools = new ArrayList<>();
+        private List<String> deniedTools = new ArrayList<>();
         private List<String> egressAllowlist = new ArrayList<>();
         private List<ChannelBinding> channels = new ArrayList<>();
 
@@ -143,6 +144,8 @@ public class JclawProperties {
         public void setSystemPromptRef(String systemPromptRef) { this.systemPromptRef = systemPromptRef; }
         public List<String> getAllowedTools() { return allowedTools; }
         public void setAllowedTools(List<String> allowedTools) { this.allowedTools = allowedTools; }
+        public List<String> getDeniedTools() { return deniedTools; }
+        public void setDeniedTools(List<String> deniedTools) { this.deniedTools = deniedTools; }
         public List<String> getEgressAllowlist() { return egressAllowlist; }
         public void setEgressAllowlist(List<String> egressAllowlist) { this.egressAllowlist = egressAllowlist; }
         public List<ChannelBinding> getChannels() { return channels; }

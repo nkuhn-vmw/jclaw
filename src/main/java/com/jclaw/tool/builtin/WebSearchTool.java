@@ -40,6 +40,10 @@ public class WebSearchTool implements ToolCallback {
             return "{\"error\": \"query is required\"}";
         }
 
+        int maxResults = parseIntField(toolInput, "maxResults", 5);
+        if (maxResults < 1) maxResults = 1;
+        if (maxResults > 20) maxResults = 20;
+
         String apiKey = secretsConfig.getSearchApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             log.warn("Web search requested but no API key configured");
@@ -49,14 +53,14 @@ public class WebSearchTool implements ToolCallback {
                 query.replace("\"", "'"));
         }
 
-        log.info("Web search: provider={} query={}", searchProvider, query);
+        log.info("Web search: provider={} query={} maxResults={}", searchProvider, query, maxResults);
 
         try {
             String result;
             if ("brave".equalsIgnoreCase(searchProvider)) {
-                result = searchBrave(query, apiKey);
+                result = searchBrave(query, apiKey, maxResults);
             } else {
-                result = searchSerpApi(query, apiKey);
+                result = searchSerpApi(query, apiKey, maxResults);
             }
             return result;
         } catch (Exception e) {
@@ -68,24 +72,24 @@ public class WebSearchTool implements ToolCallback {
         }
     }
 
-    private String searchSerpApi(String query, String apiKey) {
+    private String searchSerpApi(String query, String apiKey, int maxResults) {
         return webClient.get()
                 .uri("https://serpapi.com/search", uriBuilder -> uriBuilder
                         .queryParam("q", query)
                         .queryParam("api_key", apiKey)
                         .queryParam("engine", "google")
-                        .queryParam("num", 5)
+                        .queryParam("num", maxResults)
                         .build())
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
     }
 
-    private String searchBrave(String query, String apiKey) {
+    private String searchBrave(String query, String apiKey, int maxResults) {
         return webClient.get()
                 .uri("https://api.search.brave.com/res/v1/web/search", uriBuilder -> uriBuilder
                         .queryParam("q", query)
-                        .queryParam("count", 5)
+                        .queryParam("count", maxResults)
                         .build())
                 .header("X-Subscription-Token", apiKey)
                 .header("Accept", "application/json")
@@ -116,5 +120,29 @@ public class WebSearchTool implements ToolCallback {
         int end = json.indexOf("\"", start + 1);
         if (end < 0) return null;
         return json.substring(start + 1, end);
+    }
+
+    private int parseIntField(String json, String field, int defaultValue) {
+        if (json == null) return defaultValue;
+        int idx = json.indexOf("\"" + field + "\"");
+        if (idx < 0) return defaultValue;
+        int colonIdx = json.indexOf(":", idx);
+        if (colonIdx < 0) return defaultValue;
+        StringBuilder num = new StringBuilder();
+        for (int i = colonIdx + 1; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == ' ' || c == '\t') continue;
+            if (Character.isDigit(c)) {
+                num.append(c);
+            } else {
+                break;
+            }
+        }
+        if (num.isEmpty()) return defaultValue;
+        try {
+            return Integer.parseInt(num.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 }

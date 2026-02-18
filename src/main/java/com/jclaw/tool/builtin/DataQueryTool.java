@@ -13,6 +13,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.util.regex.Pattern;
 
 @Component
 @JclawTool(
@@ -25,6 +26,9 @@ public class DataQueryTool implements ToolCallback {
 
     private static final Logger log = LoggerFactory.getLogger(DataQueryTool.class);
     private static final int MAX_ROWS = 100;
+    private static final Pattern DANGEROUS_KEYWORD = Pattern.compile(
+            "\\b(DROP|DELETE|INSERT|UPDATE|ALTER|TRUNCATE|CREATE|GRANT|REVOKE|EXEC|EXECUTE|CALL)\\b",
+            Pattern.CASE_INSENSITIVE);
 
     private final DataSource dataSource;
 
@@ -39,17 +43,27 @@ public class DataQueryTool implements ToolCallback {
             return "{\"error\": \"query is required\"}";
         }
 
+        int maxRows = parseIntField(toolInput, "maxRows", MAX_ROWS);
+        if (maxRows < 1) maxRows = 1;
+        if (maxRows > MAX_ROWS) maxRows = MAX_ROWS;
+
         // Only allow SELECT statements
-        String trimmed = query.trim().toUpperCase();
-        if (!trimmed.startsWith("SELECT")) {
+        String trimmed = query.trim();
+        if (!trimmed.toUpperCase().startsWith("SELECT")) {
             log.warn("Rejected non-SELECT query: {}", query);
             return "{\"error\": \"Only SELECT queries are allowed\"}";
         }
 
-        // Block dangerous patterns
-        if (trimmed.contains("DROP") || trimmed.contains("DELETE") ||
-            trimmed.contains("INSERT") || trimmed.contains("UPDATE") ||
-            trimmed.contains("ALTER") || trimmed.contains("TRUNCATE")) {
+        // Block semicolons to prevent statement chaining
+        if (trimmed.contains(";")) {
+            log.warn("Rejected query with semicolon (statement chaining): {}", query);
+            return "{\"error\": \"Semicolons are not allowed in queries\"}";
+        }
+
+        // Strip string literals before checking for dangerous keywords to avoid false positives
+        String withoutStrings = trimmed.replaceAll("'[^']*'", "''");
+        if (DANGEROUS_KEYWORD.matcher(withoutStrings).find()) {
+            log.warn("Rejected query with dangerous keyword: {}", query);
             return "{\"error\": \"Query contains disallowed SQL keywords\"}";
         }
 
@@ -57,7 +71,7 @@ public class DataQueryTool implements ToolCallback {
             conn.setReadOnly(true);
             conn.setAutoCommit(false);
             try (Statement stmt = conn.createStatement()) {
-                stmt.setMaxRows(MAX_ROWS);
+                stmt.setMaxRows(maxRows);
                 stmt.setQueryTimeout(10);
                 ResultSet rs = stmt.executeQuery(query);
                 return resultSetToJson(rs);
@@ -119,5 +133,29 @@ public class DataQueryTool implements ToolCallback {
         int end = json.indexOf("\"", start + 1);
         if (end < 0) return null;
         return json.substring(start + 1, end);
+    }
+
+    private int parseIntField(String json, String field, int defaultValue) {
+        if (json == null) return defaultValue;
+        int idx = json.indexOf("\"" + field + "\"");
+        if (idx < 0) return defaultValue;
+        int colonIdx = json.indexOf(":", idx);
+        if (colonIdx < 0) return defaultValue;
+        StringBuilder num = new StringBuilder();
+        for (int i = colonIdx + 1; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == ' ' || c == '\t') continue;
+            if (Character.isDigit(c)) {
+                num.append(c);
+            } else {
+                break;
+            }
+        }
+        if (num.isEmpty()) return defaultValue;
+        try {
+            return Integer.parseInt(num.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 }

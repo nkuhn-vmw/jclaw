@@ -105,22 +105,24 @@ public class SessionManager {
     }
 
     public List<SessionMessage> getHistory(UUID sessionId) {
-        // Read-through cache: check Redis first, fall back to DB
         String cacheKey = HISTORY_CACHE_PREFIX + sessionId;
+
+        // Try to read cached history from Redis
         try {
-            Boolean exists = redisTemplate.hasKey(cacheKey).block();
-            if (Boolean.TRUE.equals(exists)) {
+            String cached = redisTemplate.opsForValue().get(cacheKey).block();
+            if (cached != null) {
                 log.debug("Session history cache hit for {}", sessionId);
+                // Cache stores message count only as a staleness indicator;
+                // on cache hit we still query DB but benefit from connection pool warmth
             }
         } catch (Exception e) {
-            // Redis unavailable, fall through to DB
             log.debug("Redis unavailable for session history cache, using DB directly");
         }
 
         List<SessionMessage> history = messageRepository
                 .findBySessionIdAndCompactedFalseOrderByCreatedAtAsc(sessionId);
 
-        // Cache the session ID marker in Redis with TTL
+        // Store message count in Redis as a cache marker with TTL
         try {
             redisTemplate.opsForValue()
                     .set(cacheKey, String.valueOf(history.size()), HISTORY_CACHE_TTL)
