@@ -52,7 +52,7 @@ public class WebSearchTool implements ToolCallback {
             return String.format(
                 "{\"query\":\"%s\",\"results\":[],\"message\":\"Web search provider not configured. " +
                 "Set search-api-key in jclaw-secrets service binding.\"}",
-                query.replace("\"", "'"));
+                escapeJson(query));
         }
 
         log.info("Web search: provider={} query={} maxResults={}", searchProvider, query, maxResults);
@@ -67,10 +67,11 @@ public class WebSearchTool implements ToolCallback {
             return result;
         } catch (Exception e) {
             log.error("Web search failed: provider={} query={}", searchProvider, query, e);
+            String errMsg = e.getMessage() != null ? e.getMessage() : "search failed";
             return String.format(
                 "{\"query\":\"%s\",\"error\":\"%s\"}",
-                query.replace("\"", "'"),
-                e.getMessage().replace("\"", "'"));
+                escapeJson(query),
+                escapeJson(errMsg));
         }
     }
 
@@ -100,6 +101,12 @@ public class WebSearchTool implements ToolCallback {
                 .bodyToMono(String.class)
                 .timeout(Duration.ofSeconds(15))
                 .block();
+    }
+
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 
     @Override
