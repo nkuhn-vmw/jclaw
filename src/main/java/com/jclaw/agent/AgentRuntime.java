@@ -12,7 +12,7 @@ import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.ai.anthropic.AnthropicChatOptions;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -113,7 +113,7 @@ public class AgentRuntime {
                     : chatClientBuilder.build();
 
             // 8. Configure request with maxTokens and model from agent config
-            AnthropicChatOptions.Builder optionsBuilder = AnthropicChatOptions.builder()
+            OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
                     .maxTokens(ctx.config().getMaxTokensPerRequest());
             if (ctx.config().getModel() != null) {
                 optionsBuilder.model(ctx.config().getModel());
