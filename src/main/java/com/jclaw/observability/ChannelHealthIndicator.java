@@ -25,11 +25,15 @@ public class ChannelHealthIndicator implements HealthIndicator {
         }
 
         Map<String, String> channelStatus = new LinkedHashMap<>();
+        boolean anyDown = false;
         for (ChannelAdapter adapter : adapters) {
-            channelStatus.put(adapter.channelType(), "active");
+            boolean connected = adapter.isConnected();
+            channelStatus.put(adapter.channelType(), connected ? "connected" : "disconnected");
+            if (!connected) anyDown = true;
         }
 
-        return Health.up()
+        Health.Builder builder = anyDown ? Health.down() : Health.up();
+        return builder
                 .withDetail("channels", channelStatus)
                 .withDetail("count", adapters.size())
                 .build();

@@ -50,6 +50,7 @@ public class JclawProperties {
         private DataRetentionProperties dataRetention = new DataRetentionProperties();
         private PiiProperties pii = new PiiProperties();
         private DataResidencyProperties dataResidency = new DataResidencyProperties();
+        private RateLimitProperties rateLimit = new RateLimitProperties();
 
         public DataRetentionProperties getDataRetention() { return dataRetention; }
         public void setDataRetention(DataRetentionProperties dataRetention) { this.dataRetention = dataRetention; }
@@ -57,6 +58,24 @@ public class JclawProperties {
         public void setPii(PiiProperties pii) { this.pii = pii; }
         public DataResidencyProperties getDataResidency() { return dataResidency; }
         public void setDataResidency(DataResidencyProperties dataResidency) { this.dataResidency = dataResidency; }
+        public RateLimitProperties getRateLimit() { return rateLimit; }
+        public void setRateLimit(RateLimitProperties rateLimit) { this.rateLimit = rateLimit; }
+    }
+
+    public static class RateLimitProperties {
+        private int userPerMinute = 20;
+        private int userPerHour = 200;
+        private int servicePerMinute = 60;
+        private int servicePerHour = 1000;
+
+        public int getUserPerMinute() { return userPerMinute; }
+        public void setUserPerMinute(int v) { this.userPerMinute = v; }
+        public int getUserPerHour() { return userPerHour; }
+        public void setUserPerHour(int v) { this.userPerHour = v; }
+        public int getServicePerMinute() { return servicePerMinute; }
+        public void setServicePerMinute(int v) { this.servicePerMinute = v; }
+        public int getServicePerHour() { return servicePerHour; }
+        public void setServicePerHour(int v) { this.servicePerHour = v; }
     }
 
     public static class DataResidencyProperties {

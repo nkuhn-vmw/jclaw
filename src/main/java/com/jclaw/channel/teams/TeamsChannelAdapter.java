@@ -84,6 +84,8 @@ public class TeamsChannelAdapter implements ChannelAdapter {
 
     @Override
     public Mono<Void> sendTypingIndicator(String conversationId) {
+        // serviceUrl will be provided via the outbound message's metadata for actual sends;
+        // for typing indicators we use the default since we only have conversationId
         Map<String, Object> activity = Map.of(
                 "type", "typing",
                 "conversation", Map.of("id", conversationId)
@@ -91,7 +93,7 @@ public class TeamsChannelAdapter implements ChannelAdapter {
 
         return getAccessToken()
                 .flatMap(token -> webClient.post()
-                        .uri(BOT_FRAMEWORK_API + "/v3/conversations/{conversationId}/activities",
+                        .uri("/v3/conversations/{conversationId}/activities",
                                 conversationId)
                         .header("Authorization", "Bearer " + token)
                         .bodyValue(activity)
@@ -108,6 +110,9 @@ public class TeamsChannelAdapter implements ChannelAdapter {
 
     @Override
     public int maxMessageLength() { return 28000; }
+
+    @Override
+    public boolean isConnected() { return appId != null && !appId.isEmpty(); }
 
     public void processActivity(String userId, String conversationId,
                                String text, Map<String, Object> metadata) {

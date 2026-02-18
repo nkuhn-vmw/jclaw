@@ -8,6 +8,17 @@ import java.util.UUID;
 @Table(name = "audit_log")
 public class AuditEvent {
 
+    // Event type constants matching spec section 5.5
+    public static final String TYPE_AUTH_SUCCESS = "AUTH_SUCCESS";
+    public static final String TYPE_AUTH_FAILURE = "AUTH_FAILURE";
+    public static final String TYPE_TOOL_CALL = "TOOL_CALL";
+    public static final String TYPE_SESSION_CREATE = "SESSION_CREATE";
+    public static final String TYPE_SESSION_ARCHIVE = "SESSION_ARCHIVE";
+    public static final String TYPE_CONFIG_CHANGE = "CONFIG_CHANGE";
+    public static final String TYPE_CONTENT_FILTER = "CONTENT_FILTER";
+    public static final String TYPE_MESSAGE_ROUTED = "MESSAGE_ROUTED";
+    public static final String TYPE_DELIVERY_FAILED = "DELIVERY_FAILED";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;

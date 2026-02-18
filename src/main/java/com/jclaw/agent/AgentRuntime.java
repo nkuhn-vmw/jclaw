@@ -117,7 +117,7 @@ public class AgentRuntime {
 
             // Track tool calls and accumulated response
             AtomicInteger toolCallCount = new AtomicInteger(0);
-            int maxToolCalls = ctx.config().getMaxToolCalls();
+            int maxToolCalls = ctx.config().getMaxToolCallsPerRequest();
             StringBuilder responseAccumulator = new StringBuilder();
 
             return spec.stream().chatResponse()

@@ -43,7 +43,14 @@ public class WebChatChannelAdapter implements ChannelAdapter {
 
     @Override
     public Mono<Void> sendTypingIndicator(String conversationId) {
-        return sendMessage(new OutboundMessage("webchat", conversationId, "[typing...]"));
+        return Mono.fromRunnable(() -> {
+            Sinks.Many<OutboundMessage> clientSink = clientSinks.get(conversationId);
+            if (clientSink != null) {
+                // Send a typing event that the SSE client can distinguish from real messages
+                clientSink.tryEmitNext(new OutboundMessage("webchat", conversationId,
+                        null, "", Map.of("type", "typing")));
+            }
+        });
     }
 
     @Override

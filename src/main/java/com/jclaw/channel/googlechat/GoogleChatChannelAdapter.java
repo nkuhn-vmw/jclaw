@@ -69,16 +69,14 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
     @Override
     public Mono<Void> sendMessage(OutboundMessage msg) {
         String spaceId = msg.conversationId();
+        String threadId = msg.threadId();
 
         Map<String, Object> message = Map.of("text", msg.content());
 
-        String threadKey = msg.metadata() != null
-                ? (String) msg.metadata().get("threadKey") : null;
-
-        if (threadKey != null) {
+        if (threadId != null) {
             message = Map.of(
                     "text", msg.content(),
-                    "thread", Map.of("name", threadKey)
+                    "thread", Map.of("name", threadId)
             );
         }
 
@@ -88,7 +86,7 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
                     WebClient.RequestBodySpec requestSpec = webClient.post()
                             .uri(uriBuilder -> {
                                 uriBuilder.path("/{spaceId}/messages");
-                                if (threadKey != null) {
+                                if (threadId != null) {
                                     uriBuilder.queryParam("messageReplyOption",
                                             "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD");
                                 }
@@ -121,10 +119,13 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
     @Override
     public int maxMessageLength() { return 4096; }
 
+    @Override
+    public boolean isConnected() { return credentials != null; }
+
     public void processEvent(String userId, String spaceId, String text,
-                            Map<String, Object> metadata) {
+                            String threadName, Map<String, Object> metadata) {
         InboundMessage msg = new InboundMessage("google-chat", userId, spaceId,
-                null, text, metadata, java.time.Instant.now());
+                threadName, text, metadata, java.time.Instant.now());
         messageSink.tryEmitNext(msg);
     }
 

@@ -53,9 +53,14 @@ public class WebChatController {
                 conversationId, auth.getName());
 
         return webChatAdapter.subscribeClient(conversationId)
-                .map(msg -> ServerSentEvent.<String>builder()
-                        .event("message")
-                        .data(msg.content())
-                        .build());
+                .map(msg -> {
+                    String eventType = msg.metadata() != null
+                            && "typing".equals(msg.metadata().get("type"))
+                            ? "typing" : "message";
+                    return ServerSentEvent.<String>builder()
+                            .event(eventType)
+                            .data(msg.content())
+                            .build();
+                });
     }
 }

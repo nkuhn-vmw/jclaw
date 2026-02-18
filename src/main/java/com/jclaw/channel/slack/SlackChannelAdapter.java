@@ -53,16 +53,24 @@ public class SlackChannelAdapter implements ChannelAdapter {
             config.setSingleTeamBotToken(botToken);
             slackApp = new App(config);
 
-            // Handle messages
+            // Handle messages (excluding app_mention events which are handled separately)
             slackApp.message(".*", (payload, ctx) -> {
                 var event = payload.getEvent();
                 if (event.getBotId() != null) return ctx.ack(); // skip bot messages
 
+                // Skip messages that contain a direct @mention of this bot
+                // — these will be handled by the AppMentionEvent handler below
+                String botUserId = ctx.getBotUserId();
+                if (botUserId != null && event.getText() != null
+                        && event.getText().contains("<@" + botUserId + ">")) {
+                    return ctx.ack();
+                }
+
                 Map<String, Object> metadata = new HashMap<>();
                 metadata.put("team", event.getTeam() != null ? event.getTeam() : "");
-                // Check if message contains @mentions
-                if (event.getText() != null && event.getText().contains("<@")) {
-                    metadata.put("mentioned", true);
+                // Detect DMs (Slack channel type "im")
+                if ("im".equals(event.getChannelType())) {
+                    metadata.put("isDm", true);
                 }
 
                 InboundMessage msg = new InboundMessage(
@@ -156,4 +164,7 @@ public class SlackChannelAdapter implements ChannelAdapter {
 
     @Override
     public int maxMessageLength() { return 4000; }
+
+    @Override
+    public boolean isConnected() { return socketModeApp != null; }
 }

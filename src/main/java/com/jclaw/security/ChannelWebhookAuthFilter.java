@@ -38,6 +38,7 @@ import com.nimbusds.jwt.proc.DefaultJWTProcessor;
  * signature verification (Slack HMAC-SHA256, Teams JWT, Google Chat JWT, Discord Ed25519).
  * Non-webhook requests pass through.
  */
+@org.springframework.stereotype.Component
 public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ChannelWebhookAuthFilter.class);
@@ -48,10 +49,13 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
     private static final String GOOGLE_ISSUER = "chat@system.gserviceaccount.com";
 
     private final SecretsConfig secretsConfig;
+    private final com.jclaw.audit.AuditService auditService;
     private final Map<String, CachedJwkSet> jwksCache = new ConcurrentHashMap<>();
 
-    public ChannelWebhookAuthFilter(SecretsConfig secretsConfig) {
+    public ChannelWebhookAuthFilter(SecretsConfig secretsConfig,
+                                    com.jclaw.audit.AuditService auditService) {
         this.secretsConfig = secretsConfig;
+        this.auditService = auditService;
     }
 
     @Override
@@ -85,6 +89,8 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
         if (!verified) {
             log.warn("Webhook signature verification failed for channel={} ip={}",
                     channelType, request.getRemoteAddr());
+            auditService.logAuth("webhook:" + channelType,
+                    "WEBHOOK_AUTH " + channelType, "AUTH_FAILED", request.getRemoteAddr());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.getWriter().write("{\"error\":\"webhook_auth_failed\"}");
             return;

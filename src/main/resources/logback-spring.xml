@@ -29,6 +29,8 @@
                         <includeMdcKeyName>agentId</includeMdcKeyName>
                         <includeMdcKeyName>channelType</includeMdcKeyName>
                         <includeMdcKeyName>principal</includeMdcKeyName>
+                        <includeMdcKeyName>channelTraceId</includeMdcKeyName>
+                        <includeMdcKeyName>traceId</includeMdcKeyName>
                     </mdc>
                     <!-- Use %piiMsg conversion word for PII-redacted message -->
                     <pattern>

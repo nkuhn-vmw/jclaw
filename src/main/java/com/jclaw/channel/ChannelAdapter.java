@@ -22,4 +22,10 @@ public interface ChannelAdapter {
      * Returns 0 if unlimited. Used for message chunking.
      */
     default int maxMessageLength() { return 0; }
+
+    /**
+     * Returns true if the adapter is connected and operational.
+     * Used by ChannelHealthIndicator.
+     */
+    default boolean isConnected() { return true; }
 }

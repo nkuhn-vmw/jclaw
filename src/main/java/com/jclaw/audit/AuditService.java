@@ -35,7 +35,9 @@ public class AuditService {
     }
 
     public void logAuth(String principal, String action, String outcome, String sourceIp) {
-        log(AuditEvent.of("AUTH", action)
+        String eventType = "SUCCESS".equals(outcome) || "AUTH_SUCCESS".equals(outcome)
+                ? AuditEvent.TYPE_AUTH_SUCCESS : AuditEvent.TYPE_AUTH_FAILURE;
+        log(AuditEvent.of(eventType, action)
                 .withPrincipal(principal)
                 .withSourceIp(sourceIp)
                 .withOutcome(outcome));
@@ -43,7 +45,7 @@ public class AuditService {
 
     public void logToolCall(String principal, String agentId, UUID sessionId,
                            String toolName, String outcome, String details) {
-        log(AuditEvent.of("TOOL_CALL", toolName)
+        log(AuditEvent.of(AuditEvent.TYPE_TOOL_CALL, toolName)
                 .withPrincipal(principal)
                 .withAgentId(agentId)
                 .withSessionId(sessionId)
@@ -60,7 +62,7 @@ public class AuditService {
     }
 
     public void logConfigChange(String principal, String agentId, String action, String details) {
-        log(AuditEvent.of("CONFIG_CHANGE", action)
+        log(AuditEvent.of(AuditEvent.TYPE_CONFIG_CHANGE, action)
                 .withPrincipal(principal)
                 .withAgentId(agentId)
                 .withDetails(details));
@@ -68,7 +70,7 @@ public class AuditService {
 
     public void logContentFilter(String filterName, String action, String principal,
                                 String channelType, String outcome) {
-        log(AuditEvent.of("CONTENT_FILTER", action)
+        log(AuditEvent.of(AuditEvent.TYPE_CONTENT_FILTER, action)
                 .withPrincipal(principal)
                 .withChannelType(channelType)
                 .withResource("filter", filterName)

@@ -45,8 +45,17 @@ public class GoogleChatWebhookController {
         String spaceId = space != null ? (String) space.get("name") : "unknown";
         String text = messageObj != null ? (String) messageObj.getOrDefault("text", "") : "";
 
-        log.debug("Google Chat event: type={} user={} space={}", type, userId, spaceId);
-        googleChatAdapter.processEvent(userId, spaceId, text, event);
+        // Extract thread name for thread-based replies
+        String threadName = null;
+        if (messageObj != null) {
+            Map<String, Object> thread = asMap(messageObj.get("thread"));
+            if (thread != null) {
+                threadName = (String) thread.get("name");
+            }
+        }
+
+        log.debug("Google Chat event: type={} user={} space={} thread={}", type, userId, spaceId, threadName);
+        googleChatAdapter.processEvent(userId, spaceId, text, threadName, event);
 
         return ResponseEntity.ok(Map.of("text", "Processing your request..."));
     }

@@ -17,14 +17,13 @@ class SlackChannelAdapterTest {
     }
 
     @Test
-    void restApiAdapterPublishesMessages() {
+    void restApiAdapterSendMessageIsNoop() {
         RestApiChannelAdapter adapter = new RestApiChannelAdapter();
 
-        InboundMessage message = new InboundMessage("rest-api", "user1", "conv1", "Hello");
+        OutboundMessage message = new OutboundMessage("rest-api", "conv1", "Hello");
 
-        StepVerifier.create(adapter.receiveMessages().take(1))
-                .then(() -> adapter.publishMessage(message))
-                .expectNext(message)
+        // REST API adapter's sendMessage is a no-op (responses go through controller)
+        StepVerifier.create(adapter.sendMessage(message))
                 .verifyComplete();
     }
 

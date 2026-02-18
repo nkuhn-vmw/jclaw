@@ -5,7 +5,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "identity_mappings")
+@Table(name = "identity_mappings", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"channel_type", "channel_user_id"})
+})
 public class IdentityMapping {
 
     @Id

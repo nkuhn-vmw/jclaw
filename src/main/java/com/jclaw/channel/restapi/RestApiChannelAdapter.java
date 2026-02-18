@@ -6,20 +6,21 @@ import com.jclaw.channel.OutboundMessage;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.Sinks;
 
+/**
+ * REST API channel adapter. Messages are handled directly by ChatApiController
+ * rather than through the ChannelRouter pipeline, so receiveMessages() returns
+ * an empty flux and sendMessage() is a no-op.
+ */
 @Component
 public class RestApiChannelAdapter implements ChannelAdapter {
-
-    private final Sinks.Many<InboundMessage> messageSink =
-            Sinks.many().multicast().onBackpressureBuffer();
 
     @Override
     public String channelType() { return "rest-api"; }
 
     @Override
     public Flux<InboundMessage> receiveMessages() {
-        return messageSink.asFlux();
+        return Flux.never();
     }
 
     @Override
@@ -38,8 +39,4 @@ public class RestApiChannelAdapter implements ChannelAdapter {
 
     @Override
     public boolean supportsReactions() { return false; }
-
-    public void publishMessage(InboundMessage message) {
-        messageSink.tryEmitNext(message);
-    }
 }

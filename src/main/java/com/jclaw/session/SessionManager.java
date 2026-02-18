@@ -81,6 +81,10 @@ public class SessionManager {
         if (message.conversationId() != null && message.conversationId().startsWith("G")) {
             return SessionScope.GROUP;
         }
+        // DM scope for direct messages (per-user-per-channel isolation)
+        if (message.metadata() != null && Boolean.TRUE.equals(message.metadata().get("isDm"))) {
+            return SessionScope.DM;
+        }
         return SessionScope.valueOf(properties.getSession().getDefaultScope());
     }
 

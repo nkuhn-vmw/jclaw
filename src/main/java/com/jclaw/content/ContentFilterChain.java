@@ -61,6 +61,33 @@ public class ContentFilterChain {
         return new ContentFilterPolicy(); // default policy
     }
 
+    /**
+     * Filters outbound content (tool outputs, LLM responses) for data exfiltration.
+     * Only runs the EgressGuard filter on outbound content.
+     */
+    public void filterOutbound(String content, AgentContext context) {
+        ContentFilterPolicy policy = resolvePolicy(context.agentId());
+        if (!policy.isEnableEgressGuard()) return;
+
+        // Create a synthetic inbound message to reuse the EgressGuard filter
+        InboundMessage synthetic = new InboundMessage(
+                context.channelType(), "system", null, null, content, null, null);
+
+        for (ContentFilter filter : filters) {
+            if ("EgressGuard".equals(filter.name())) {
+                ContentFilter.FilterResult result = filter.filter(synthetic, context);
+                if (!result.passed()) {
+                    metrics.recordContentFilterTriggered("EgressGuard", "BLOCKED_OUTBOUND");
+                    auditService.logContentFilter("EgressGuard", "BLOCKED_OUTBOUND",
+                            context.principal(), context.channelType(), "FILTERED");
+                    log.warn("Egress guard blocked outbound content for agent={}: {}",
+                            context.agentId(), result.reason());
+                    throw new ContentFilterException("EgressGuard", result.reason());
+                }
+            }
+        }
+    }
+
     private boolean isFilterEnabled(ContentFilter filter, ContentFilterPolicy policy) {
         return switch (filter.name()) {
             case "PatternDetector" -> policy.isEnablePatternDetection();

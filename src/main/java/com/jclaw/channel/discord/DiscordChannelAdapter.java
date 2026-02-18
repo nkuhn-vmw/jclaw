@@ -65,13 +65,28 @@ public class DiscordChannelAdapter extends ListenerAdapter implements ChannelAda
     public void onMessageReceived(MessageReceivedEvent event) {
         if (event.getAuthor().isBot()) return;
 
+        // Propagate thread ID for threaded messages
+        String threadId = event.isFromThread()
+                ? event.getChannel().getId() : null;
+        // Use parent channel ID as conversationId for threads
+        String conversationId = event.isFromThread()
+                ? event.getMessage().getChannel().asThreadChannel()
+                        .getParentChannel().getId()
+                : event.getChannel().getId();
+
+        Map<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("guild", event.isFromGuild() ? event.getGuild().getId() : "dm");
+        if (!event.isFromGuild()) {
+            metadata.put("isDm", true);
+        }
+
         InboundMessage msg = new InboundMessage(
                 "discord",
                 event.getAuthor().getId(),
-                event.getChannel().getId(),
-                null,
+                conversationId,
+                threadId,
                 event.getMessage().getContentRaw(),
-                Map.of("guild", event.isFromGuild() ? event.getGuild().getId() : "dm"),
+                metadata,
                 java.time.Instant.now());
         messageSink.tryEmitNext(msg);
     }
@@ -88,6 +103,14 @@ public class DiscordChannelAdapter extends ListenerAdapter implements ChannelAda
     public Mono<Void> sendMessage(OutboundMessage msg) {
         return Mono.fromRunnable(() -> {
             if (jda == null) return;
+            // If threadId is present, send to the thread channel
+            if (msg.threadId() != null) {
+                MessageChannel thread = jda.getThreadChannelById(msg.threadId());
+                if (thread != null) {
+                    thread.sendMessage(msg.content()).queue();
+                    return;
+                }
+            }
             MessageChannel channel = jda.getTextChannelById(msg.conversationId());
             if (channel != null) {
                 channel.sendMessage(msg.content()).queue();
@@ -114,4 +137,9 @@ public class DiscordChannelAdapter extends ListenerAdapter implements ChannelAda
 
     @Override
     public int maxMessageLength() { return 2000; }
+
+    @Override
+    public boolean isConnected() {
+        return jda != null && jda.getStatus() == JDA.Status.CONNECTED;
+    }
 }

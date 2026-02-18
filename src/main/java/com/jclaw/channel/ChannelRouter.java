@@ -4,14 +4,17 @@ import com.jclaw.agent.AgentRuntime;
 import com.jclaw.agent.AgentContext;
 import com.jclaw.audit.AuditService;
 import com.jclaw.config.JclawProperties;
-import com.jclaw.content.ContentFilterChain;
+import com.jclaw.observability.JclawMetrics;
 import com.jclaw.security.IdentityMappingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+import reactor.util.retry.Retry;
 
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -25,29 +28,30 @@ public class ChannelRouter {
     private final Map<String, ChannelAdapter> adapters;
     private final AgentRuntime agentRuntime;
     private final IdentityMappingService identityMappingService;
-    private final ContentFilterChain contentFilterChain;
     private final AuditService auditService;
     private final JclawProperties properties;
+    private final JclawMetrics metrics;
 
     public ChannelRouter(List<ChannelAdapter> adapterList,
                         AgentRuntime agentRuntime,
                         IdentityMappingService identityMappingService,
-                        ContentFilterChain contentFilterChain,
                         AuditService auditService,
-                        JclawProperties properties) {
+                        JclawProperties properties,
+                        JclawMetrics metrics) {
         this.adapters = adapterList.stream()
                 .collect(Collectors.toMap(ChannelAdapter::channelType, Function.identity()));
         this.agentRuntime = agentRuntime;
         this.identityMappingService = identityMappingService;
-        this.contentFilterChain = contentFilterChain;
         this.auditService = auditService;
         this.properties = properties;
+        this.metrics = metrics;
     }
 
     @PostConstruct
     public void startRouting() {
         adapters.values().forEach(adapter ->
             adapter.receiveMessages()
+                .publishOn(Schedulers.boundedElastic())
                 .flatMap(msg -> routeMessage(msg)
                     .onErrorResume(e -> {
                         log.error("Error routing message from channel={} user={}",
@@ -86,15 +90,8 @@ public class ChannelRouter {
             .flatMap(principal -> {
                 AgentContext context = new AgentContext(agentId, principal, message.channelType());
 
-                try {
-                    contentFilterChain.filterInbound(message, context);
-                } catch (ContentFilterChain.ContentFilterException e) {
-                    log.warn("Content filter rejected message from principal={}: {}",
-                            principal, e.getMessage());
-                    auditService.logContentFilter(e.getFilterName(), "REJECTED",
-                            principal, message.channelType(), "FILTERED");
-                    return Mono.empty();
-                }
+                // Content filtering is performed in AgentRuntime.processMessage()
+                // to avoid duplicate filtering and double audit events
 
                 auditService.logSessionEvent("MESSAGE_ROUTED", principal, agentId, null,
                         "Message routed from " + message.channelType());
@@ -122,11 +119,11 @@ public class ChannelRouter {
                             }
 
                             // Propagate threadId from inbound to outbound message
-                            return adapter.sendMessage(
-                                    new OutboundMessage(message.channelType(),
-                                            message.conversationId(),
-                                            message.threadId(),
-                                            combined, Map.of()));
+                            return deliverWithRetry(adapter, new OutboundMessage(
+                                    message.channelType(),
+                                    message.conversationId(),
+                                    message.threadId(),
+                                    combined, Map.of()));
                         })
                 );
             })
@@ -227,13 +224,27 @@ public class ChannelRouter {
 
         Mono<Void> chain = Mono.empty();
         for (String chunk : chunks) {
-            chain = chain.then(adapter.sendMessage(
-                    new OutboundMessage(message.channelType(),
-                            message.conversationId(),
-                            message.threadId(),
-                            chunk, Map.of())));
+            chain = chain.then(deliverWithRetry(adapter, new OutboundMessage(
+                    message.channelType(),
+                    message.conversationId(),
+                    message.threadId(),
+                    chunk, Map.of())));
         }
         return chain;
+    }
+
+    private Mono<Void> deliverWithRetry(ChannelAdapter adapter, OutboundMessage msg) {
+        return adapter.sendMessage(msg)
+                .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
+                        .maxBackoff(Duration.ofSeconds(10)))
+                .doOnError(e -> {
+                    log.error("Message delivery failed after retries for channel={}: {}",
+                            msg.channelType(), e.getMessage());
+                    metrics.recordDeliveryFailed(msg.channelType());
+                    auditService.logSessionEvent("DELIVERY_FAILED", null, null, null,
+                            "Delivery failed to " + msg.channelType() + ": " + e.getMessage());
+                })
+                .onErrorResume(e -> Mono.empty());
     }
 
     public ChannelAdapter getAdapter(String channelType) {

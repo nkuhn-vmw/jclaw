@@ -1,6 +1,5 @@
 package com.jclaw.security;
 
-import com.jclaw.config.SecretsConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -20,13 +19,13 @@ public class SsoSecurityConfig {
 
     private final AuditLogFilter auditLogFilter;
     private final RateLimitFilter rateLimitFilter;
-    private final SecretsConfig secretsConfig;
+    private final ChannelWebhookAuthFilter channelWebhookAuthFilter;
 
     public SsoSecurityConfig(AuditLogFilter auditLogFilter, RateLimitFilter rateLimitFilter,
-                             SecretsConfig secretsConfig) {
+                             ChannelWebhookAuthFilter channelWebhookAuthFilter) {
         this.auditLogFilter = auditLogFilter;
         this.rateLimitFilter = rateLimitFilter;
-        this.secretsConfig = secretsConfig;
+        this.channelWebhookAuthFilter = channelWebhookAuthFilter;
     }
 
     @Bean
@@ -56,8 +55,7 @@ public class SsoSecurityConfig {
                         .requestMatchers("/api/service/**").hasAuthority("SCOPE_jclaw.service")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(
-                        new ChannelWebhookAuthFilter(secretsConfig), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(channelWebhookAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(auditLogFilter, AuthorizationFilter.class)
                 .addFilterAfter(rateLimitFilter, AuditLogFilter.class)
                 .sessionManagement(session -> session

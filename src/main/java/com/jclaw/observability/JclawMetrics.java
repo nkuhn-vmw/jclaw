@@ -91,6 +91,14 @@ public class JclawMetrics {
                 .register(registry).increment();
     }
 
+    // --- Delivery metrics ---
+
+    public void recordDeliveryFailed(String channel) {
+        Counter.builder("jclaw.messages.delivery.failed")
+                .tag("channel", channel)
+                .register(registry).increment();
+    }
+
     // --- Session metrics ---
 
     public void sessionOpened() {

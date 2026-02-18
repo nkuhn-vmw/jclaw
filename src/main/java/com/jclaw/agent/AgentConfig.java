@@ -49,7 +49,7 @@ public class AgentConfig {
     private int maxTokensPerRequest = 4096;
 
     @Column(name = "max_tool_calls")
-    private int maxToolCalls = 10;
+    private int maxToolCallsPerRequest = 10;
 
     @Column(name = "max_history_tokens")
     private int maxHistoryTokens = 128000;
@@ -100,8 +100,8 @@ public class AgentConfig {
     public int getMaxTokensPerRequest() { return maxTokensPerRequest; }
     public void setMaxTokensPerRequest(int maxTokensPerRequest) { this.maxTokensPerRequest = maxTokensPerRequest; }
 
-    public int getMaxToolCalls() { return maxToolCalls; }
-    public void setMaxToolCalls(int maxToolCalls) { this.maxToolCalls = maxToolCalls; }
+    public int getMaxToolCallsPerRequest() { return maxToolCallsPerRequest; }
+    public void setMaxToolCallsPerRequest(int maxToolCallsPerRequest) { this.maxToolCallsPerRequest = maxToolCallsPerRequest; }
 
     public int getMaxHistoryTokens() { return maxHistoryTokens; }
     public void setMaxHistoryTokens(int maxHistoryTokens) { this.maxHistoryTokens = maxHistoryTokens; }

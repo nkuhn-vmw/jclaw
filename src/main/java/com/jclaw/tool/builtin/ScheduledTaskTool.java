@@ -11,6 +11,8 @@ import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.slf4j.MDC;
+
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -60,7 +62,9 @@ public class ScheduledTaskTool implements ToolCallback {
             Instant nextFire = cronExpr.next(Instant.now().atZone(ZoneOffset.UTC).toLocalDateTime())
                     .atZone(ZoneOffset.UTC).toInstant();
 
-            ScheduledTask task = new ScheduledTask(name, cron, message, null, null);
+            String agentId = MDC.get("agentId");
+            String principal = MDC.get("principal");
+            ScheduledTask task = new ScheduledTask(name, cron, message, agentId, principal);
             task.setNextFireAt(nextFire);
             ScheduledTask saved = taskRepository.save(task);
 

@@ -1,5 +1,6 @@
 package com.jclaw.security;
 
+import com.jclaw.config.JclawProperties;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
@@ -23,16 +24,12 @@ import java.util.List;
 /**
  * Per-user rate limiting with per-minute and per-hour caps.
  * Uses Redis for distributed rate limiting across CF instances.
+ * Limits are configurable via jclaw.security.rate-limit properties.
  */
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
-
-    private static final int USER_LIMIT_PER_MINUTE = 20;
-    private static final int USER_LIMIT_PER_HOUR = 200;
-    private static final int SERVICE_LIMIT_PER_MINUTE = 60;
-    private static final int SERVICE_LIMIT_PER_HOUR = 1000;
 
     // Lua script for atomic increment-and-check with TTL
     private static final String RATE_LIMIT_SCRIPT = """
@@ -46,14 +43,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final ReactiveStringRedisTemplate redisTemplate;
     private final Counter rateLimitExceeded;
     private final DefaultRedisScript<Long> rateLimitRedisScript;
+    private final JclawProperties.RateLimitProperties rateLimitProperties;
 
     public RateLimitFilter(ReactiveStringRedisTemplate redisTemplate,
-                           MeterRegistry meterRegistry) {
+                           MeterRegistry meterRegistry,
+                           JclawProperties jclawProperties) {
         this.redisTemplate = redisTemplate;
         this.rateLimitExceeded = Counter.builder("jclaw.rate_limit.exceeded")
                 .description("Rate limit exceeded events")
                 .register(meterRegistry);
         this.rateLimitRedisScript = new DefaultRedisScript<>(RATE_LIMIT_SCRIPT, Long.class);
+        this.rateLimitProperties = jclawProperties.getSecurity().getRateLimit();
     }
 
     @Override
@@ -73,8 +73,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         String key = auth.getName();
         boolean isService = isService(auth);
-        int minuteLimit = isService ? SERVICE_LIMIT_PER_MINUTE : USER_LIMIT_PER_MINUTE;
-        int hourLimit = isService ? SERVICE_LIMIT_PER_HOUR : USER_LIMIT_PER_HOUR;
+        int minuteLimit = isService ? rateLimitProperties.getServicePerMinute()
+                : rateLimitProperties.getUserPerMinute();
+        int hourLimit = isService ? rateLimitProperties.getServicePerHour()
+                : rateLimitProperties.getUserPerHour();
 
         // Check per-minute limit via Redis
         Long minuteCount = checkRateLimit("jclaw:rate:" + key + ":min", 60_000);
