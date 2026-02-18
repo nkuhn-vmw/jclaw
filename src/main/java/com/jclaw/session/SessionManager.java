@@ -105,7 +105,13 @@ public class SessionManager {
         if (message.metadata() != null && Boolean.TRUE.equals(message.metadata().get("isDm"))) {
             return SessionScope.DM;
         }
-        return SessionScope.valueOf(properties.getSession().getDefaultScope());
+        try {
+            return SessionScope.valueOf(properties.getSession().getDefaultScope());
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid jclaw.session.default-scope '{}', defaulting to MAIN",
+                    properties.getSession().getDefaultScope());
+            return SessionScope.MAIN;
+        }
     }
 
     @Transactional

@@ -38,6 +38,11 @@ public class DataQueryTool implements ToolCallback {
             "information_schema", "pg_catalog", "pg_tables", "pg_views",
             "pg_columns", "pg_stat", "sys.tables", "sys.columns",
             "all_tables", "all_tab_columns", "dba_tables");
+    private static final Set<String> BLOCKED_FUNCTIONS = Set.of(
+            "pg_read_file", "pg_read_binary_file", "pg_ls_dir", "pg_write_file",
+            "pg_execute_server_program", "pg_sleep",
+            "dblink", "lo_export", "lo_import", "lo_create",
+            "copy_to", "copy_from");
 
     private final DataSource dataSource;
 
@@ -83,6 +88,14 @@ public class DataQueryTool implements ToolCallback {
             if (lowerQuery.contains(schema)) {
                 log.warn("Rejected query referencing catalog/metadata schema {}: {}", schema, query);
                 return "{\"error\": \"Queries against database catalog schemas are not allowed\"}";
+            }
+        }
+
+        // Block dangerous database functions
+        for (String func : BLOCKED_FUNCTIONS) {
+            if (lowerQuery.contains(func)) {
+                log.warn("Rejected query referencing dangerous function {}: {}", func, query);
+                return "{\"error\": \"Query references blocked database function\"}";
             }
         }
 

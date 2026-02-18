@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WebChatChannelAdapter implements ChannelAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(WebChatChannelAdapter.class);
+    private static final int MAX_CLIENT_SINKS = 10_000;
 
     private final Sinks.Many<InboundMessage> messageSink =
             Sinks.many().multicast().onBackpressureBuffer();
@@ -66,6 +67,10 @@ public class WebChatChannelAdapter implements ChannelAdapter {
     }
 
     public Flux<OutboundMessage> subscribeClient(String conversationId) {
+        if (clientSinks.size() >= MAX_CLIENT_SINKS && !clientSinks.containsKey(conversationId)) {
+            log.warn("Client sinks limit reached ({} entries), rejecting new subscription", clientSinks.size());
+            return Flux.empty();
+        }
         Sinks.Many<OutboundMessage> sink = clientSinks.computeIfAbsent(conversationId,
                 k -> Sinks.many().multicast().onBackpressureBuffer());
         return sink.asFlux()

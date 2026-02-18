@@ -246,6 +246,18 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
         String timestamp = request.getHeader("X-Signature-Timestamp");
         if (signatureHex == null || timestamp == null) return false;
 
+        // Replay protection: reject timestamps older than 5 minutes
+        try {
+            long ts = Long.parseLong(timestamp);
+            if (Math.abs(System.currentTimeMillis() / 1000 - ts) > 300) {
+                log.warn("Discord webhook timestamp too old: {}", timestamp);
+                return false;
+            }
+        } catch (NumberFormatException e) {
+            log.warn("Discord webhook timestamp not a number: {}", timestamp);
+            return false;
+        }
+
         try {
             // Decode the public key from hex
             byte[] publicKeyBytes = HexFormat.of().parseHex(publicKeyHex);

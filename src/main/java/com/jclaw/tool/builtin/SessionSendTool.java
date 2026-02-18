@@ -1,5 +1,7 @@
 package com.jclaw.tool.builtin;
 
+import com.jclaw.agent.AgentContext;
+import com.jclaw.content.ContentFilterChain;
 import com.jclaw.session.SessionManager;
 import com.jclaw.session.MessageRole;
 import com.jclaw.tool.JclawTool;
@@ -26,9 +28,12 @@ public class SessionSendTool implements ToolCallback {
     private static final int MAX_MESSAGE_LENGTH = 10_000;
 
     private final SessionManager sessionManager;
+    private final ContentFilterChain contentFilterChain;
 
-    public SessionSendTool(SessionManager sessionManager) {
+    public SessionSendTool(SessionManager sessionManager,
+                           ContentFilterChain contentFilterChain) {
         this.sessionManager = sessionManager;
+        this.contentFilterChain = contentFilterChain;
     }
 
     @Override
@@ -61,6 +66,21 @@ public class SessionSendTool implements ToolCallback {
 
             String senderAgent = MDC.get("agentId");
             String labeledMessage = "[Cross-session from agent: " + (senderAgent != null ? senderAgent : "unknown") + "] " + message;
+
+            // Egress guard: prevent injecting content that would be blocked by content filters
+            // Use sender's agent context so their egress policy applies
+            if (senderAgent != null) {
+                try {
+                    AgentContext ctx = new AgentContext(senderAgent, callingPrincipal,
+                            targetSession.getChannelType());
+                    contentFilterChain.filterOutbound(labeledMessage, ctx);
+                } catch (ContentFilterChain.ContentFilterException e) {
+                    log.warn("Egress guard blocked cross-session message from agent={}: {}",
+                            senderAgent, e.getMessage());
+                    return "{\"error\": \"Message blocked by content filter\"}";
+                }
+            }
+
             int tokens = labeledMessage.length() / 4;
             sessionManager.addMessage(sessionId, MessageRole.USER, labeledMessage, tokens);
             log.info("Cross-session message sent to session={} from agent={}", sessionId, senderAgent);

@@ -170,7 +170,8 @@ public class AgentRuntime {
                         if (!partial.isEmpty()) {
                             try {
                                 // Egress guard: don't persist content that would be blocked
-                                contentFilterChain.filterOutbound(partial, context);
+                                // Use request-start policy snapshot to prevent TOCTOU bypass
+                                contentFilterChain.filterOutbound(partial, context, egressPolicy);
                                 sessionManager.addMessage(ctx.session().getId(),
                                         MessageRole.ASSISTANT, partial, estimateTokens(partial));
                                 log.debug("Stored partial response ({} chars) for cancelled stream",
