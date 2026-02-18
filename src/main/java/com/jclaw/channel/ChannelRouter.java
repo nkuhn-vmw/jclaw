@@ -83,8 +83,9 @@ public class ChannelRouter {
             // WebChat users provide their principal directly via channelUserId (SSO identity)
             principalMono = Mono.just(message.channelUserId());
         } else {
-            principalMono = identityMappingService.resolvePrincipal(
-                    message.channelType(), message.channelUserId());
+            principalMono = Mono.fromCallable(() ->
+                    identityMappingService.resolvePrincipal(
+                            message.channelType(), message.channelUserId()));
         }
 
         return principalMono

@@ -73,16 +73,16 @@ public class AgentRuntime {
             // Record inbound message metric
             metrics.recordMessageReceived(context.channelType(), context.agentId());
 
-            // 1. Resolve session
-            Session session = sessionManager.resolveSession(context, message);
+            // 1. Content filtering FIRST (throws ContentFilterException if rejected)
+            // Run before session resolution to avoid orphaning empty sessions on rejection
+            InboundMessage filtered = contentFilterChain.filterInbound(message, context);
+
+            // 2. Resolve session (only after content filter passes)
+            Session session = sessionManager.resolveSession(context, filtered);
             MDC.put("sessionId", session.getId().toString());
 
-            // 2. Resolve agent config first (needed for content filter policy and prompt)
+            // 3. Resolve agent config (needed for content filter policy and prompt)
             AgentConfig config = agentConfigService.getOrCreateDefault(context.agentId());
-
-            // 3. Content filtering (throws ContentFilterException if rejected)
-            // Returns sanitized message with cleaned content
-            InboundMessage filtered = contentFilterChain.filterInbound(message, context);
 
             // 4. Store user message (use sanitized content)
             sessionManager.addMessage(session.getId(), MessageRole.USER,

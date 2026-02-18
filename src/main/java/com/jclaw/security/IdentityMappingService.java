@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.List;
@@ -31,9 +30,8 @@ public class IdentityMappingService {
     }
 
     @Transactional
-    public Mono<String> resolvePrincipal(String channelType, String channelUserId) {
-        return Mono.fromCallable(() ->
-            repository.findByChannelTypeAndChannelUserId(channelType, channelUserId)
+    public String resolvePrincipal(String channelType, String channelUserId) {
+        return repository.findByChannelTypeAndChannelUserId(channelType, channelUserId)
                 .filter(m -> m.isApproved() && m.getJclawPrincipal() != null
                         && !m.getJclawPrincipal().isBlank())
                 .map(mapping -> {
@@ -44,8 +42,7 @@ public class IdentityMappingService {
                 .orElseThrow(() -> {
                     log.debug("No approved mapping for {}:{}", channelType, channelUserId);
                     return new UnmappedIdentityException("No approved identity mapping found");
-                })
-        );
+                });
     }
 
     @Transactional

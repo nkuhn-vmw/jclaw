@@ -126,13 +126,19 @@ public class ToolRegistry {
                 metrics.recordToolInvocation(toolName, context.agentId(), "success");
                 return result;
             } catch (Exception e) {
-                String errorMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "unknown error";
+                String errorMsg = e.getMessage() != null ? escapeJson(e.getMessage()) : "unknown error";
                 auditService.logToolCall(context.principal(), context.agentId(),
                         sessionId, toolName, "FAILURE",
                         "{\"error\":\"" + errorMsg + "\"}");
                 metrics.recordToolInvocation(toolName, context.agentId(), "failure");
                 throw e;
             }
+        }
+
+        private static String escapeJson(String s) {
+            return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                    .replace("\n", "\\n").replace("\r", "\\r")
+                    .replace("\t", "\\t");
         }
 
         @Override

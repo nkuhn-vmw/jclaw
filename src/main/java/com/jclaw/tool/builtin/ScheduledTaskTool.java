@@ -55,7 +55,7 @@ public class ScheduledTaskTool implements ToolCallback {
             case "create" -> createTask(toolInput);
             case "cancel" -> cancelTask(toolInput);
             case "list" -> listTasks();
-            default -> "{\"error\": \"Unknown action: " + action + ". Use create, cancel, or list.\"}";
+            default -> "{\"error\": \"Unknown action: " + escapeJson(action) + ". Use create, cancel, or list.\"}";
         };
     }
 
@@ -94,7 +94,7 @@ public class ScheduledTaskTool implements ToolCallback {
                     "{\"taskId\":\"%s\",\"name\":\"%s\",\"cron\":\"%s\",\"nextFireAt\":\"%s\",\"status\":\"scheduled\"}",
                     saved.getId(), escapeJson(name), escapeJson(cron), nextFire);
         } catch (IllegalArgumentException e) {
-            return "{\"error\": \"Invalid cron expression: " + cron + "\"}";
+            return "{\"error\": \"Invalid cron expression: " + escapeJson(cron) + "\"}";
         }
     }
 
@@ -107,13 +107,17 @@ public class ScheduledTaskTool implements ToolCallback {
             UUID id = UUID.fromString(taskId);
             return taskRepository.findById(id)
                     .map(task -> {
-                        // Verify the calling agent owns the task (deny if agent unknown or mismatched)
+                        // Verify the calling agent and principal own the task
                         String callingAgent = MDC.get("agentId");
-                        if (callingAgent == null) {
+                        String callingPrincipal = MDC.get("principal");
+                        if (callingAgent == null || callingPrincipal == null) {
                             return "{\"error\": \"Access denied: caller identity unknown\"}";
                         }
                         if (task.getAgentId() == null || !callingAgent.equals(task.getAgentId())) {
                             return "{\"error\": \"Access denied: task belongs to a different agent\"}";
+                        }
+                        if (task.getPrincipal() == null || !callingPrincipal.equals(task.getPrincipal())) {
+                            return "{\"error\": \"Access denied: task belongs to a different user\"}";
                         }
                         task.setStatus(ScheduledTask.TaskStatus.CANCELLED);
                         taskRepository.save(task);
@@ -127,8 +131,14 @@ public class ScheduledTaskTool implements ToolCallback {
 
     private String listTasks() {
         String agentId = MDC.get("agentId");
+        String principal = MDC.get("principal");
+        if (agentId == null || principal == null) {
+            return "{\"error\": \"Access denied: caller identity unknown\"}";
+        }
         List<ScheduledTask> tasks = taskRepository.findByStatus(ScheduledTask.TaskStatus.ACTIVE)
-                .stream().filter(t -> agentId == null || agentId.equals(t.getAgentId())).toList();
+                .stream()
+                .filter(t -> agentId.equals(t.getAgentId()) && principal.equals(t.getPrincipal()))
+                .toList();
         StringBuilder sb = new StringBuilder("[");
         boolean first = true;
         for (ScheduledTask task : tasks) {

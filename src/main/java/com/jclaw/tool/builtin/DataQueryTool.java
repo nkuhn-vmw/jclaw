@@ -56,8 +56,8 @@ public class DataQueryTool implements ToolCallback {
         if (maxRows < 1) maxRows = 1;
         if (maxRows > MAX_ROWS) maxRows = MAX_ROWS;
 
-        // Only allow SELECT statements
-        String trimmed = query.trim();
+        // Normalize line endings before processing
+        String trimmed = query.trim().replace("\r\n", "\n").replace("\r", "\n");
         if (!trimmed.toUpperCase().startsWith("SELECT")) {
             log.warn("Rejected non-SELECT query: {}", query);
             return "{\"error\": \"Only SELECT queries are allowed\"}";
@@ -69,8 +69,8 @@ public class DataQueryTool implements ToolCallback {
             return "{\"error\": \"Semicolons are not allowed in queries\"}";
         }
 
-        // Strip SQL comments and string literals before checking for dangerous keywords
-        String withoutComments = trimmed.replaceAll("/\\*.*?\\*/", " ").replaceAll("--.*$", " ");
+        // Strip SQL comments (block and line) and string literals before checking for dangerous keywords
+        String withoutComments = trimmed.replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("--[^\n]*", " ");
         String withoutStrings = withoutComments.replaceAll("'[^']*'", "''");
         if (DANGEROUS_KEYWORD.matcher(withoutStrings).find()) {
             log.warn("Rejected query with dangerous keyword: {}", query);

@@ -67,6 +67,8 @@ public class AgentConfigService {
     private static final int MAX_TOOL_CALLS = 100;
     private static final int MIN_TOKENS = 256;
     private static final int MAX_TOKENS = 200_000;
+    private static final int MAX_HISTORY_TOKENS = 1_000_000;
+    private static final int MAX_SYSTEM_PROMPT_LENGTH = 50_000;
 
     @Transactional
     @PreAuthorize("hasAuthority('SCOPE_jclaw.admin')")
@@ -80,6 +82,11 @@ public class AgentConfigService {
         if (config.getMaxToolCallsPerRequest() > MAX_TOOL_CALLS) config.setMaxToolCallsPerRequest(MAX_TOOL_CALLS);
         if (config.getMaxTokensPerRequest() < MIN_TOKENS) config.setMaxTokensPerRequest(MIN_TOKENS);
         if (config.getMaxTokensPerRequest() > MAX_TOKENS) config.setMaxTokensPerRequest(MAX_TOKENS);
+        if (config.getMaxHistoryTokens() < MIN_TOKENS) config.setMaxHistoryTokens(MIN_TOKENS);
+        if (config.getMaxHistoryTokens() > MAX_HISTORY_TOKENS) config.setMaxHistoryTokens(MAX_HISTORY_TOKENS);
+        if (config.getSystemPrompt() != null && config.getSystemPrompt().length() > MAX_SYSTEM_PROMPT_LENGTH) {
+            config.setSystemPrompt(config.getSystemPrompt().substring(0, MAX_SYSTEM_PROMPT_LENGTH));
+        }
 
         AgentConfig saved = agentConfigRepository.save(config);
         auditService.logConfigChange(principal, agentId, "AGENT_CONFIG_UPDATE",
