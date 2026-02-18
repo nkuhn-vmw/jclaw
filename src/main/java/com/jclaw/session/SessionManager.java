@@ -183,6 +183,7 @@ public class SessionManager {
             List<CachedMessage> cached = messages.stream()
                     .map(m -> new CachedMessage(m.getId().toString(), m.getRole().name(),
                             m.getContent(), m.getTokenCount(),
+                            m.getToolCalls(), m.getToolResults(), m.getMetadata(),
                             m.getCreatedAt() != null ? m.getCreatedAt().toString() : null))
                     .toList();
             return objectMapper.writeValueAsString(cached);
@@ -199,6 +200,9 @@ public class SessionManager {
                 SessionMessage msg = new SessionMessage(sessionId,
                         MessageRole.valueOf(c.role()), c.content());
                 msg.setTokenCount(c.tokenCount());
+                msg.setToolCalls(c.toolCalls());
+                msg.setToolResults(c.toolResults());
+                msg.setMetadata(c.metadata());
                 return msg;
             }).toList();
         } catch (Exception e) {
@@ -208,5 +212,7 @@ public class SessionManager {
     }
 
     private record CachedMessage(String id, String role, String content,
-                                  Integer tokenCount, String createdAt) {}
+                                  Integer tokenCount, String toolCalls,
+                                  String toolResults, String metadata,
+                                  String createdAt) {}
 }

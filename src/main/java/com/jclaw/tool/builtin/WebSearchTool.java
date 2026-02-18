@@ -35,12 +35,12 @@ public class WebSearchTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        String query = extractField(toolInput, "query");
+        String query = com.jclaw.tool.ToolInputParser.getString(toolInput, "query");
         if (query == null || query.isBlank()) {
             return "{\"error\": \"query is required\"}";
         }
 
-        int maxResults = parseIntField(toolInput, "maxResults", 5);
+        int maxResults = com.jclaw.tool.ToolInputParser.getInt(toolInput, "maxResults", 5);
         if (maxResults < 1) maxResults = 1;
         if (maxResults > 20) maxResults = 20;
 
@@ -111,38 +111,4 @@ public class WebSearchTool implements ToolCallback {
                 .build();
     }
 
-    private String extractField(String json, String field) {
-        if (json == null) return null;
-        int idx = json.indexOf("\"" + field + "\"");
-        if (idx < 0) return json.trim().replaceAll("^\"|\"$", "");
-        int start = json.indexOf("\"", idx + field.length() + 2);
-        if (start < 0) return null;
-        int end = json.indexOf("\"", start + 1);
-        if (end < 0) return null;
-        return json.substring(start + 1, end);
-    }
-
-    private int parseIntField(String json, String field, int defaultValue) {
-        if (json == null) return defaultValue;
-        int idx = json.indexOf("\"" + field + "\"");
-        if (idx < 0) return defaultValue;
-        int colonIdx = json.indexOf(":", idx);
-        if (colonIdx < 0) return defaultValue;
-        StringBuilder num = new StringBuilder();
-        for (int i = colonIdx + 1; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == ' ' || c == '\t') continue;
-            if (Character.isDigit(c)) {
-                num.append(c);
-            } else {
-                break;
-            }
-        }
-        if (num.isEmpty()) return defaultValue;
-        try {
-            return Integer.parseInt(num.toString());
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
 }

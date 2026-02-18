@@ -7,6 +7,7 @@ import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -37,6 +38,11 @@ public class GenAiConfig {
     public ChatModel testChatModel() {
         // Return a mock-friendly model for testing
         return createAnthropicModel("http://localhost:8089", "test-key", "claude-sonnet-4-20250514");
+    }
+
+    @Bean
+    public ModelRouter modelRouter(ChatModel defaultModel, ApplicationContext applicationContext) {
+        return new ModelRouter(defaultModel, applicationContext);
     }
 
     private ChatModel createAnthropicModel(String apiBase, String apiKey, String model) {

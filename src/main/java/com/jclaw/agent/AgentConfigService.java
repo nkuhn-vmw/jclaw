@@ -30,12 +30,18 @@ public class AgentConfigService {
         this.objectMapper = objectMapper;
     }
 
-    @PreAuthorize("hasAnyAuthority('SCOPE_jclaw.user', 'SCOPE_jclaw.operator', 'SCOPE_jclaw.admin', 'SCOPE_jclaw.service')")
+    /**
+     * Internal read method — no @PreAuthorize because this is called from agent runtime
+     * threads (boundedElastic) where Spring Security context is unavailable.
+     * HTTP-layer security is enforced at the controller level.
+     */
     public AgentConfig getAgentConfig(String agentId) {
         return agentConfigRepository.findById(agentId).orElse(null);
     }
 
-    @PreAuthorize("hasAnyAuthority('SCOPE_jclaw.user', 'SCOPE_jclaw.operator', 'SCOPE_jclaw.admin', 'SCOPE_jclaw.service')")
+    /**
+     * Internal read/create method — no @PreAuthorize for the same reason as getAgentConfig.
+     */
     public AgentConfig getOrCreateDefault(String agentId) {
         return agentConfigRepository.findById(agentId)
                 .orElseGet(() -> {

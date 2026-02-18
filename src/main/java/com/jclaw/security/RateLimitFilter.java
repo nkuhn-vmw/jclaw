@@ -9,7 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -40,12 +40,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return current
             """;
 
-    private final ReactiveStringRedisTemplate redisTemplate;
+    private final ReactiveRedisTemplate<String, String> redisTemplate;
     private final Counter rateLimitExceeded;
     private final DefaultRedisScript<Long> rateLimitRedisScript;
     private final JclawProperties.RateLimitProperties rateLimitProperties;
 
-    public RateLimitFilter(ReactiveStringRedisTemplate redisTemplate,
+    public RateLimitFilter(ReactiveRedisTemplate<String, String> redisTemplate,
                            MeterRegistry meterRegistry,
                            JclawProperties jclawProperties) {
         this.redisTemplate = redisTemplate;

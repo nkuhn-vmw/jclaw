@@ -31,7 +31,7 @@ public class SessionListTool implements ToolCallback {
     @Override
     public String call(String toolInput) {
         // toolInput expected: {"principal": "user@example.com"}
-        String principal = extractField(toolInput, "principal");
+        String principal = com.jclaw.tool.ToolInputParser.getString(toolInput, "principal");
         if (principal == null) return "{\"error\": \"principal required\"}";
 
         List<Session> sessions = sessionManager.getActiveSessions(principal);
@@ -51,14 +51,4 @@ public class SessionListTool implements ToolCallback {
                 .build();
     }
 
-    private String extractField(String json, String field) {
-        if (json == null) return null;
-        int idx = json.indexOf("\"" + field + "\"");
-        if (idx < 0) return null;
-        int start = json.indexOf("\"", idx + field.length() + 2);
-        if (start < 0) return null;
-        int end = json.indexOf("\"", start + 1);
-        if (end < 0) return null;
-        return json.substring(start + 1, end);
-    }
 }

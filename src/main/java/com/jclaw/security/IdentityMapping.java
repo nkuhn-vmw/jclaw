@@ -20,7 +20,7 @@ public class IdentityMapping {
     @Column(name = "channel_user_id", nullable = false, length = 256)
     private String channelUserId;
 
-    @Column(name = "jclaw_principal", nullable = false, length = 256)
+    @Column(name = "jclaw_principal", length = 256)
     private String jclawPrincipal;
 
     @Column(name = "display_name", length = 256)

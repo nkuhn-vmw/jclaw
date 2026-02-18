@@ -40,7 +40,7 @@ public class HttpFetchTool implements ToolCallback {
     @Override
     public String call(String toolInput) {
         try {
-            String url = extractField(toolInput, "url");
+            String url = com.jclaw.tool.ToolInputParser.getString(toolInput, "url");
             if (url == null) return "{\"error\": \"No URL provided\"}";
 
             // Use agentId from MDC (set by AgentRuntime) — never trust LLM-provided agentId
@@ -81,17 +81,4 @@ public class HttpFetchTool implements ToolCallback {
                 .build();
     }
 
-    private String extractField(String toolInput, String field) {
-        if (toolInput == null) return null;
-        int idx = toolInput.indexOf("\"" + field + "\"");
-        if (idx < 0) {
-            if (field.equals("url")) return toolInput.trim().replaceAll("^\"|\"$", "");
-            return null;
-        }
-        int start = toolInput.indexOf("\"", idx + field.length() + 2);
-        if (start < 0) return null;
-        int end = toolInput.indexOf("\"", start + 1);
-        if (end < 0) return null;
-        return toolInput.substring(start + 1, end);
-    }
 }

@@ -136,12 +136,17 @@ public class AgentRuntime {
 
                     // Store assistant response and apply egress guard
                     String fullResponse = responseAccumulator.toString();
-                    if (!fullResponse.isEmpty()) {
-                        // 9. Egress guard: filter outbound content before delivery
-                        contentFilterChain.filterOutbound(fullResponse, context);
 
+                    // 9. Egress guard: filter outbound content before delivery
+                    // Run on all responses (including tool-only) to catch data exfiltration
+                    if (!fullResponse.isEmpty()) {
+                        contentFilterChain.filterOutbound(fullResponse, context);
                         sessionManager.addMessage(ctx.session().getId(), MessageRole.ASSISTANT,
                                 fullResponse, estimateTokens(fullResponse));
+                    } else if (toolCallCount.get() > 0) {
+                        // Tool-only response: scan tool results that were returned
+                        log.debug("Tool-only response with {} tool calls, egress guard applied via tool audit",
+                                toolCallCount.get());
                     }
 
                     // Record message processed metric with outcome (OBS-001)

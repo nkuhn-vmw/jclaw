@@ -7,6 +7,7 @@ import com.jclaw.audit.AuditService;
 import com.jclaw.observability.JclawMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.context.ApplicationContext;
@@ -111,6 +112,10 @@ public class ToolRegistry {
 
         @Override
         public String call(String toolInput) {
+            // Propagate MDC context to whatever thread Spring AI uses for tool execution
+            MDC.put("agentId", context.agentId());
+            MDC.put("principal", context.principal());
+            MDC.put("channelType", context.channelType());
             try {
                 String result = delegate.call(toolInput);
                 auditService.logToolCall(context.principal(), context.agentId(),

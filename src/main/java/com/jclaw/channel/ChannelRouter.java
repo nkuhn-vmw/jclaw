@@ -133,11 +133,11 @@ public class ChannelRouter {
                 log.warn("Unmapped identity: channel={} user={}", message.channelType(),
                         message.channelUserId());
 
-                // Queue unmapped identity for later approval instead of dropping
+                // Queue unmapped identity for admin to assign a real SSO principal
                 identityMappingService.createMapping(
                         message.channelType(),
                         message.channelUserId(),
-                        message.channelUserId(),
+                        null,
                         null);
 
                 auditService.logSessionEvent("UNMAPPED_IDENTITY_QUEUED", message.channelUserId(),

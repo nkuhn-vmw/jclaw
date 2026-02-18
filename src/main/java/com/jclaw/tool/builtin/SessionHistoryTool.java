@@ -32,7 +32,7 @@ public class SessionHistoryTool implements ToolCallback {
     @Override
     public String call(String toolInput) {
         try {
-            String sessionIdStr = extractField(toolInput, "sessionId");
+            String sessionIdStr = com.jclaw.tool.ToolInputParser.getString(toolInput, "sessionId");
             if (sessionIdStr == null) return "{\"error\": \"sessionId required\"}";
 
             UUID sessionId = UUID.fromString(sessionIdStr);
@@ -54,17 +54,6 @@ public class SessionHistoryTool implements ToolCallback {
                 .description("Retrieve session transcript")
                 .inputSchema("{\"type\":\"object\",\"properties\":{\"sessionId\":{\"type\":\"string\",\"description\":\"Session UUID to retrieve history for\"}},\"required\":[\"sessionId\"]}")
                 .build();
-    }
-
-    private String extractField(String json, String field) {
-        if (json == null) return null;
-        int idx = json.indexOf("\"" + field + "\"");
-        if (idx < 0) return null;
-        int start = json.indexOf("\"", idx + field.length() + 2);
-        if (start < 0) return null;
-        int end = json.indexOf("\"", start + 1);
-        if (end < 0) return null;
-        return json.substring(start + 1, end);
     }
 
     private String escapeJson(String s) {

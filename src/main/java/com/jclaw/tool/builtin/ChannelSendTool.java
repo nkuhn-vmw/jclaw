@@ -31,9 +31,9 @@ public class ChannelSendTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        String channel = extractField(toolInput, "channel");
-        String conversationId = extractField(toolInput, "conversationId");
-        String message = extractField(toolInput, "message");
+        String channel = com.jclaw.tool.ToolInputParser.getString(toolInput, "channel");
+        String conversationId = com.jclaw.tool.ToolInputParser.getString(toolInput, "conversationId");
+        String message = com.jclaw.tool.ToolInputParser.getString(toolInput, "message");
 
         if (channel == null || conversationId == null || message == null) {
             return "{\"error\": \"channel, conversationId, and message are required\"}";
@@ -69,14 +69,4 @@ public class ChannelSendTool implements ToolCallback {
                 .build();
     }
 
-    private String extractField(String json, String field) {
-        if (json == null) return null;
-        int idx = json.indexOf("\"" + field + "\"");
-        if (idx < 0) return null;
-        int start = json.indexOf("\"", idx + field.length() + 2);
-        if (start < 0) return null;
-        int end = json.indexOf("\"", start + 1);
-        if (end < 0) return null;
-        return json.substring(start + 1, end);
-    }
 }

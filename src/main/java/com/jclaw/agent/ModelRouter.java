@@ -5,13 +5,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.context.ApplicationContext;
-import org.springframework.stereotype.Component;
-
 import jakarta.annotation.PostConstruct;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Component
+/**
+ * Routes agents to their configured ChatModel.
+ * Declared as a @Bean in GenAiConfig per spec §6.4.
+ */
 public class ModelRouter {
 
     private static final Logger log = LoggerFactory.getLogger(ModelRouter.class);

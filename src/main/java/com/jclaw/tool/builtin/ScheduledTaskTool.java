@@ -44,7 +44,7 @@ public class ScheduledTaskTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        String action = extractField(toolInput, "action");
+        String action = com.jclaw.tool.ToolInputParser.getString(toolInput, "action");
         if (action == null) action = "list";
 
         return switch (action) {
@@ -56,9 +56,9 @@ public class ScheduledTaskTool implements ToolCallback {
     }
 
     private String createTask(String toolInput) {
-        String name = extractField(toolInput, "name");
-        String cron = extractField(toolInput, "cron");
-        String message = extractField(toolInput, "message");
+        String name = com.jclaw.tool.ToolInputParser.getString(toolInput, "name");
+        String cron = com.jclaw.tool.ToolInputParser.getString(toolInput, "cron");
+        String message = com.jclaw.tool.ToolInputParser.getString(toolInput, "message");
 
         if (name == null || cron == null) {
             return "{\"error\": \"name and cron are required for task creation\"}";
@@ -86,7 +86,7 @@ public class ScheduledTaskTool implements ToolCallback {
 
     @Transactional
     private String cancelTask(String toolInput) {
-        String taskId = extractField(toolInput, "taskId");
+        String taskId = com.jclaw.tool.ToolInputParser.getString(toolInput, "taskId");
         if (taskId == null) return "{\"error\": \"taskId required\"}";
 
         try {
@@ -183,14 +183,4 @@ public class ScheduledTaskTool implements ToolCallback {
                 .build();
     }
 
-    private String extractField(String json, String field) {
-        if (json == null) return null;
-        int idx = json.indexOf("\"" + field + "\"");
-        if (idx < 0) return null;
-        int start = json.indexOf("\"", idx + field.length() + 2);
-        if (start < 0) return null;
-        int end = json.indexOf("\"", start + 1);
-        if (end < 0) return null;
-        return json.substring(start + 1, end);
-    }
 }

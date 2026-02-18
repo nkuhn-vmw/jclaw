@@ -62,7 +62,9 @@ public class SsoSecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        .ignoringRequestMatchers("/api/**", "/webhooks/**")
+                )
                 .build();
     }
 
@@ -87,6 +89,7 @@ public class SsoSecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterAfter(auditLogFilter, AuthorizationFilter.class)
+                .addFilterAfter(rateLimitFilter, AuditLogFilter.class)
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 )

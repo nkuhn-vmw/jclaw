@@ -10,9 +10,11 @@ import java.util.regex.Pattern;
 public class EgressAllowlistValidator {
 
     public boolean isAllowed(String url, AgentConfig agentConfig) {
-        if (agentConfig == null || agentConfig.getEgressAllowlist() == null
-                || agentConfig.getEgressAllowlist().isEmpty()) {
-            return false; // deny by default if no allowlist configured
+        if (agentConfig == null) {
+            return false; // deny if no agent config at all
+        }
+        if (agentConfig.getEgressAllowlist() == null || agentConfig.getEgressAllowlist().isEmpty()) {
+            return true; // no allowlist configured = unrestricted egress (spec §8: agents without explicit allowlist can use http_fetch)
         }
 
         try {
