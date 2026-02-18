@@ -58,7 +58,12 @@ public class ChannelSendTool implements ToolCallback {
                 agentId != null ? agentId : "unknown",
                 principal != null ? principal : "system",
                 channelType != null ? channelType : "tool");
-        contentFilterChain.filterOutbound(message, ctx);
+        try {
+            contentFilterChain.filterOutbound(message, ctx);
+        } catch (ContentFilterChain.ContentFilterException e) {
+            log.warn("Egress guard blocked channel_send from agent={}: {}", agentId, e.getMessage());
+            return "{\"error\": \"Message blocked by content filter\"}";
+        }
 
         ChannelAdapter adapter = channelRouter.getAdapter(channel);
         if (adapter == null) {

@@ -68,17 +68,17 @@ public class SessionSendTool implements ToolCallback {
             String labeledMessage = "[Cross-session from agent: " + (senderAgent != null ? senderAgent : "unknown") + "] " + message;
 
             // Egress guard: prevent injecting content that would be blocked by content filters
-            // Use sender's agent context so their egress policy applies
-            if (senderAgent != null) {
-                try {
-                    AgentContext ctx = new AgentContext(senderAgent, callingPrincipal,
-                            targetSession.getChannelType());
-                    contentFilterChain.filterOutbound(labeledMessage, ctx);
-                } catch (ContentFilterChain.ContentFilterException e) {
-                    log.warn("Egress guard blocked cross-session message from agent={}: {}",
-                            senderAgent, e.getMessage());
-                    return "{\"error\": \"Message blocked by content filter\"}";
-                }
+            // Always run regardless of MDC state to prevent bypass when agentId is absent
+            try {
+                AgentContext ctx = new AgentContext(
+                        senderAgent != null ? senderAgent : "unknown",
+                        callingPrincipal,
+                        targetSession.getChannelType());
+                contentFilterChain.filterOutbound(labeledMessage, ctx);
+            } catch (ContentFilterChain.ContentFilterException e) {
+                log.warn("Egress guard blocked cross-session message from agent={}: {}",
+                        senderAgent, e.getMessage());
+                return "{\"error\": \"Message blocked by content filter\"}";
             }
 
             int tokens = labeledMessage.length() / 4;

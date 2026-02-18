@@ -91,14 +91,17 @@ public class CompactionService {
             conversationText = conversationText.substring(0, MAX_CONVERSATION_TEXT_LENGTH);
         }
 
+        // Snapshot egress policy BEFORE LLM call to prevent TOCTOU toggle
+        AgentContext ctx = new AgentContext(current.getAgentId(),
+                current.getPrincipal(), current.getChannelType());
+        var egressPolicy = contentFilterChain.resolvePolicy(current.getAgentId());
+
         // Generate LLM summary
         String summary = generateLlmSummary(conversationText);
 
-        // Egress guard: filter the compaction summary before storing
+        // Egress guard: filter the compaction summary before storing (uses pre-resolved snapshot)
         try {
-            AgentContext ctx = new AgentContext(current.getAgentId(),
-                    current.getPrincipal(), current.getChannelType());
-            contentFilterChain.filterOutbound(summary, ctx);
+            contentFilterChain.filterOutbound(summary, ctx, egressPolicy);
         } catch (ContentFilterChain.ContentFilterException e) {
             log.warn("Egress guard blocked compaction summary for session {}: {}",
                     session.getId(), e.getMessage());
