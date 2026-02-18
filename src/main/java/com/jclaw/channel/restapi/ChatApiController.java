@@ -33,14 +33,8 @@ public class ChatApiController {
 
         AgentContext context = new AgentContext(agentId, principal, "rest-api");
 
-        return agentRuntime.processMessage(context, message)
-                .collectList()
-                .map(responses -> {
-                    String combined = responses.stream()
-                            .map(AgentResponse::content)
-                            .collect(java.util.stream.Collectors.joining(""));
-                    return new ChatResponse(combined, agentId);
-                });
+        return agentRuntime.callMessage(context, message)
+                .map(response -> new ChatResponse(response.content(), agentId));
     }
 
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

@@ -110,13 +110,10 @@ public class ChannelRouter {
                         : Mono.empty();
 
                 return typingIndicator.then(
-                    agentRuntime.processMessage(context, message)
-                        .collectList()
-                        .flatMap(responses -> {
-                            if (responses.isEmpty()) return Mono.empty();
-                            String combined = responses.stream()
-                                    .map(r -> r.content())
-                                    .collect(Collectors.joining(""));
+                    agentRuntime.callMessage(context, message)
+                        .flatMap(response -> {
+                            String combined = response.content();
+                            if (combined == null || combined.isEmpty()) return Mono.empty();
                             if (adapter == null) return Mono.empty();
 
                             // Chunk messages for channels with size limits

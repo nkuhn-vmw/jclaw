@@ -1,6 +1,8 @@
 package com.jclaw.session;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -28,6 +30,7 @@ public class Session {
     @Column(nullable = false, length = 16)
     private SessionScope scope = SessionScope.MAIN;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String metadata = "{}";
 

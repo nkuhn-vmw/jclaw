@@ -1,6 +1,8 @@
 package com.jclaw.audit;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -50,6 +52,7 @@ public class AuditEvent {
     @Column(name = "resource_id", length = 256)
     private String resourceId;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String details = "{}";
 

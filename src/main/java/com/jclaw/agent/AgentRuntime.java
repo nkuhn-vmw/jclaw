@@ -63,6 +63,100 @@ public class AgentRuntime {
         this.chatClientBuilder = chatClientBuilder;
     }
 
+    /**
+     * Non-streaming message processing. Uses ChatClient.call() for a single LLM round-trip.
+     * Preferred for REST API /send endpoint to avoid duplicate responses from streaming.
+     */
+    @Observed(name = "jclaw.agent.call", contextualName = "agent-call-message")
+    public Mono<AgentResponse> callMessage(AgentContext context, InboundMessage message) {
+        return Mono.fromCallable(() -> {
+            MDC.put("agentId", context.agentId());
+            MDC.put("principal", context.principal());
+            MDC.put("channelType", context.channelType());
+
+            metrics.recordMessageReceived(context.channelType(), context.agentId());
+
+            InboundMessage filtered = contentFilterChain.filterInbound(message, context);
+            Session session = sessionManager.resolveSession(context, filtered);
+            MDC.put("sessionId", session.getId().toString());
+
+            AgentConfig config = agentConfigService.getOrCreateDefault(context.agentId());
+
+            sessionManager.addMessage(session.getId(), MessageRole.USER,
+                    filtered.content(), estimateTokens(filtered.content()));
+
+            Prompt prompt = promptService.buildPrompt(context, session, filtered);
+            List<ToolCallback> tools = toolRegistry.resolveTools(context);
+
+            return new LlmCallContext(session, prompt, tools, config);
+        })
+        .subscribeOn(Schedulers.boundedElastic())
+        .flatMap(ctx -> Mono.fromCallable(() -> {
+            Timer.Sample sample = metrics.startLlmTimer();
+
+            ChatModel resolvedModel = modelRouter.resolveModel(context.agentId(), ctx.config());
+            String modelName = ctx.config().getModel() != null ? ctx.config().getModel() : "default";
+            metrics.recordLlmRequest(modelName, context.agentId());
+
+            ChatClient chatClient = (resolvedModel != modelRouter.getDefaultModel())
+                    ? ChatClient.builder(resolvedModel).build()
+                    : chatClientBuilder.build();
+
+            OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
+                    .maxTokens(ctx.config().getMaxTokensPerRequest());
+            if (ctx.config().getModel() != null) {
+                optionsBuilder.model(ctx.config().getModel());
+            }
+            ChatClient.ChatClientRequestSpec spec = chatClient.prompt(ctx.prompt())
+                    .options(optionsBuilder.build());
+            if (!ctx.tools().isEmpty()) {
+                spec = spec.tools(ctx.tools());
+            }
+
+            // Single blocking LLM call
+            ChatResponse chatResponse = spec.call().chatResponse();
+
+            metrics.stopLlmTimer(sample, modelName, context.agentId());
+            extractAndRecordTokenUsage(chatResponse, modelName, context.agentId());
+
+            String text = chatResponse.getResult() != null
+                    && chatResponse.getResult().getOutput() != null
+                    ? chatResponse.getResult().getOutput().getText()
+                    : "";
+            if (text == null) text = "";
+
+            // Egress guard
+            var egressPolicy = contentFilterChain.resolvePolicy(context.agentId());
+            contentFilterChain.filterOutbound(text, context, egressPolicy);
+
+            // Store assistant response
+            if (!text.isEmpty()) {
+                sessionManager.addMessage(ctx.session().getId(), MessageRole.ASSISTANT,
+                        text, estimateTokens(text));
+            }
+
+            metrics.recordMessageProcessed(context.channelType(), context.agentId(), "success");
+            auditService.logSessionEvent("MESSAGE_PROCESSED", context.principal(),
+                    context.agentId(), ctx.session().getId(), "Message processed");
+
+            return new AgentResponse(text);
+        }).subscribeOn(Schedulers.boundedElastic()))
+        .onErrorResume(ContentFilterChain.ContentFilterException.class, e -> {
+            log.warn("Content filtered for agent={} principal={}: {}",
+                    context.agentId(), context.principal(), e.getMessage());
+            metrics.recordMessageProcessed(context.channelType(), context.agentId(), "filtered");
+            return Mono.just(new AgentResponse("Your message could not be processed."));
+        })
+        .onErrorResume(e -> {
+            log.error("Error processing message for agent={} principal={}",
+                    context.agentId(), context.principal(), e);
+            metrics.recordMessageProcessed(context.channelType(), context.agentId(), "error");
+            return Mono.just(new AgentResponse(
+                    "I encountered an error processing your request. Please try again."));
+        })
+        .doFinally(signal -> MDC.clear());
+    }
+
     @Observed(name = "jclaw.agent.process", contextualName = "agent-process-message")
     public Flux<AgentResponse> processMessage(AgentContext context, InboundMessage message) {
         return Mono.fromCallable(() -> {

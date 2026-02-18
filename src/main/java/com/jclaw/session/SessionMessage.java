@@ -1,6 +1,8 @@
 package com.jclaw.session;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -25,12 +27,15 @@ public class SessionMessage {
     @Column(name = "token_count")
     private Integer tokenCount;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "tool_calls", columnDefinition = "jsonb")
     private String toolCalls;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "tool_results", columnDefinition = "jsonb")
     private String toolResults;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String metadata = "{}";
 
