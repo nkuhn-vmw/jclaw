@@ -47,6 +47,7 @@ dependencies {
     // Cloud Foundry
     implementation 'io.pivotal.cfenv:java-cfenv-boot:3.5.0'
     implementation 'io.pivotal.cfenv:java-cfenv-boot-pivotal-sso:3.5.0'
+    implementation 'io.pivotal.cfenv:java-cfenv-boot-tanzu-genai:3.5.0'
 
     // Database
     runtimeOnly 'org.postgresql:postgresql'

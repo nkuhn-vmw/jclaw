@@ -45,7 +45,7 @@ Think of it as the connective tissue between your AI models and the places your 
 | Layer | Technology |
 |-------|-----------|
 | Framework | Spring Boot 3.4, Java 21 |
-| AI | Spring AI 1.0.0-M6 (Anthropic + OpenAI) |
+| AI | Spring AI 1.0.0-M6 (Tanzu GenAI, Anthropic, OpenAI) |
 | Database | PostgreSQL + Flyway migrations |
 | Cache | Redis (reactive, session history caching) |
 | Auth | SSO via OAuth2/OIDC, per-channel webhook verification |
@@ -80,13 +80,45 @@ SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
 cf create-service genai standard jclaw-genai
 cf create-service p.redis on-demand-cache jclaw-cache
 cf create-service postgres on-demand-small jclaw-db
-cf create-service p-identity standard jclaw-sso
-cf cups jclaw-secrets -p '{"anthropic-api-key":"sk-..."}'
+cf create-service p-identity uaa jclaw-sso
+cf cups jclaw-secrets -p '{"admin-api-key":"your-key"}'
 
 # Build and push
 ./gradlew build
 cf push
 ```
+
+### Tanzu GenAI Service Binding
+
+jclaw supports both Tanzu GenAI service binding formats. The GenAI tile is always the primary model provider in the cloud profile — it takes priority over any other configured model providers.
+
+**Endpoint format (multi-model)** — A single service binding exposes multiple models through the GenAI proxy. Models are discovered automatically at startup via the OpenAI-compatible `/v1/models` endpoint. Embedding models are filtered out.
+
+```json
+{
+  "credentials": {
+    "endpoint": {
+      "api_base": "https://genai-proxy.example.com/instance-id",
+      "api_key": "...",
+      "config_url": "https://genai-proxy.example.com/config/..."
+    }
+  }
+}
+```
+
+**Direct binding format (single-model)** — Each service binding maps to exactly one model with flat credentials.
+
+```json
+{
+  "credentials": {
+    "api_base": "https://model-endpoint.example.com",
+    "api_key": "...",
+    "model_name": "my-model"
+  }
+}
+```
+
+Both formats are auto-detected from VCAP_SERVICES. You can mix formats across multiple `genai` service bindings. Agents can target specific models by name in their configuration.
 
 ### Configuration
 

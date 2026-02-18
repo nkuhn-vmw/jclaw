@@ -1,9 +1,11 @@
 package com.jclaw.agent;
 
+import com.jclaw.config.GenAiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.context.ApplicationContext;
 import jakarta.annotation.PostConstruct;
 import java.util.Map;
@@ -12,6 +14,10 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Routes agents to their configured ChatModel.
  * Declared as a @Bean in GenAiConfig per spec §6.4.
+ *
+ * Discovers models from:
+ * 1. Spring ApplicationContext (ChatModel beans)
+ * 2. GenAiConfig cloud models (Tanzu GenAI multi-model discovery)
  */
 public class ModelRouter {
 
@@ -44,6 +50,21 @@ public class ModelRouter {
                 log.info("Registered model: {}", beanName);
             }
         }
+
+        // Register cloud models from GenAiConfig (Tanzu GenAI multi-model support)
+        try {
+            GenAiConfig genAiConfig = applicationContext.getBean(GenAiConfig.class);
+            Map<String, ChatModel> cloudModels = genAiConfig.getCloudModels();
+            for (Map.Entry<String, ChatModel> entry : cloudModels.entrySet()) {
+                if (!modelRegistry.containsKey(entry.getKey())) {
+                    modelRegistry.put(entry.getKey(), entry.getValue());
+                    log.info("Registered cloud model: {}", entry.getKey());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("GenAiConfig not available for cloud model registration");
+        }
+
         log.info("Model router initialized with {} entries (default={})",
                 modelRegistry.size(), defaultModel.getClass().getSimpleName());
     }
@@ -63,7 +84,17 @@ public class ModelRouter {
                     return options.getModel();
                 }
             } catch (Exception e) {
-                log.debug("Could not extract model ID from ChatModel", e);
+                log.debug("Could not extract model ID from AnthropicChatModel", e);
+            }
+        }
+        if (chatModel instanceof OpenAiChatModel openAiModel) {
+            try {
+                var options = openAiModel.getDefaultOptions();
+                if (options != null && options.getModel() != null) {
+                    return options.getModel();
+                }
+            } catch (Exception e) {
+                log.debug("Could not extract model ID from OpenAiChatModel", e);
             }
         }
         return null;
