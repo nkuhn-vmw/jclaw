@@ -50,7 +50,7 @@ public class AuditEvent {
     @Column(name = "resource_id", length = 256)
     private String resourceId;
 
-    @Column(columnDefinition = "text")
+    @Column(columnDefinition = "jsonb")
     private String details = "{}";
 
     @Column(name = "source_ip", length = 45)

@@ -28,7 +28,7 @@ public class Session {
     @Column(nullable = false, length = 16)
     private SessionScope scope = SessionScope.MAIN;
 
-    @Column(length = 100000)
+    @Column(columnDefinition = "jsonb")
     private String metadata = "{}";
 
     @Column(name = "created_at", nullable = false, updatable = false)

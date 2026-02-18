@@ -45,8 +45,8 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-openai-spring-boot-starter'
 
     // Cloud Foundry
-    implementation 'io.pivotal.cfenv:java-cfenv-boot:3.2.0'
-    implementation 'io.pivotal.cfenv:java-cfenv-boot-pivotal-sso:3.2.0'
+    implementation 'io.pivotal.cfenv:java-cfenv-boot:3.5.0'
+    implementation 'io.pivotal.cfenv:java-cfenv-boot-pivotal-sso:3.5.0'
 
     // Database
     runtimeOnly 'org.postgresql:postgresql'

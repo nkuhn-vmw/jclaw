@@ -20,15 +20,16 @@ public class GenAiConfig {
 
     @Bean
     @Profile("cloud")
+    @org.springframework.context.annotation.Primary
     public ChatModel cloudChatModel(
-            @Value("${vcap.services.jclaw-genai.credentials.api_base}") String apiBase,
-            @Value("${vcap.services.jclaw-genai.credentials.api_key}") String apiKey,
-            @Value("${vcap.services.jclaw-genai.credentials.model_name:}") String modelName) {
-        // GenAI tile on TAS provides OpenAI-compatible API
-        OpenAiApi api = new OpenAiApi(apiBase, apiKey);
-        String model = (modelName != null && !modelName.isEmpty()) ? modelName : "default";
+            @Value("${vcap.services.jclaw-genai.credentials.endpoint.api_base}") String apiBase,
+            @Value("${vcap.services.jclaw-genai.credentials.endpoint.api_key}") String apiKey,
+            @Value("${vcap.services.jclaw-genai.credentials.endpoint.name:}") String endpointName) {
+        // GenAI tile on TAS uses {api_base}/openai/v1 as the OpenAI-compatible path
+        String openAiBaseUrl = apiBase + "/openai";
+        OpenAiApi api = new OpenAiApi(openAiBaseUrl, apiKey);
         return new OpenAiChatModel(api, OpenAiChatOptions.builder()
-                .model(model)
+                .model("openai/gpt-oss-120b")
                 .maxTokens(4096)
                 .temperature(0.7)
                 .build());

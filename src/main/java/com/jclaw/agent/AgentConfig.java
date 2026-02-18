@@ -24,7 +24,7 @@ public class AgentConfig {
     @Column(name = "trust_level", nullable = false, length = 16)
     private AgentTrustLevel trustLevel = AgentTrustLevel.STANDARD;
 
-    @Column(name = "system_prompt", length = 100000)
+    @Column(name = "system_prompt", columnDefinition = "text")
     private String systemPrompt;
 
     @ElementCollection(fetch = FetchType.EAGER)
@@ -57,7 +57,7 @@ public class AgentConfig {
     @Embedded
     private ContentFilterPolicy contentFilterPolicy = new ContentFilterPolicy();
 
-    @Column(name = "config_json", length = 100000)
+    @Column(name = "config_json", columnDefinition = "jsonb")
     private String configJson = "{}";
 
     @Column(name = "created_at", nullable = false, updatable = false)

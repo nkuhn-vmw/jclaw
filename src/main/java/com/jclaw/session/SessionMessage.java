@@ -19,19 +19,19 @@ public class SessionMessage {
     @Column(nullable = false, length = 16)
     private MessageRole role;
 
-    @Column(nullable = false, length = 100000)
+    @Column(nullable = false, columnDefinition = "text")
     private String content;
 
     @Column(name = "token_count")
     private Integer tokenCount;
 
-    @Column(name = "tool_calls", length = 100000)
+    @Column(name = "tool_calls", columnDefinition = "jsonb")
     private String toolCalls;
 
-    @Column(name = "tool_results", length = 100000)
+    @Column(name = "tool_results", columnDefinition = "jsonb")
     private String toolResults;
 
-    @Column(length = 100000)
+    @Column(columnDefinition = "jsonb")
     private String metadata = "{}";
 
     @Column(name = "created_at", nullable = false, updatable = false)
