@@ -2,6 +2,7 @@ package com.jclaw.observability;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.boot.actuate.health.Health;
@@ -37,7 +38,8 @@ public class GenAiHealthIndicator implements HealthIndicator {
 
         try {
             // Lightweight connectivity check: send minimal prompt with 1 max token
-            Prompt healthCheckPrompt = new Prompt("hi");
+            Prompt healthCheckPrompt = new Prompt("hi",
+                    AnthropicChatOptions.builder().maxTokens(1).build());
             chatModel.call(healthCheckPrompt);
             Health h = Health.up()
                     .withDetail("model", chatModel.getClass().getSimpleName())

@@ -32,9 +32,10 @@
                         <includeMdcKeyName>channelTraceId</includeMdcKeyName>
                         <includeMdcKeyName>traceId</includeMdcKeyName>
                     </mdc>
-                    <!-- Use %piiMsg conversion word for PII-redacted message -->
+                    <!-- PII-redacted message using conversion word -->
                     <pattern>
                         <pattern>{"message": "%piiMsg"}</pattern>
+                        <omitEmptyFields>true</omitEmptyFields>
                     </pattern>
                     <stackTrace/>
                 </providers>

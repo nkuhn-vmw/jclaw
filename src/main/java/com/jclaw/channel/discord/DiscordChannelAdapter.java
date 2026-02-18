@@ -149,6 +149,8 @@ public class DiscordChannelAdapter extends ListenerAdapter implements ChannelAda
 
     @Override
     public boolean isConnected() {
-        return jda != null && jda.getStatus() == JDA.Status.CONNECTED;
+        return jda != null && jda.getStatus() != JDA.Status.SHUTDOWN
+                && jda.getStatus() != JDA.Status.SHUTTING_DOWN
+                && jda.getStatus() != JDA.Status.FAILED_TO_LOGIN;
     }
 }

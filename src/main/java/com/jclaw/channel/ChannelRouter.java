@@ -58,7 +58,8 @@ public class ChannelRouter {
                                 msg.channelType(), msg.channelUserId(), e);
                         return Mono.empty();
                     }))
-                .retry()
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(5))
+                        .maxBackoff(Duration.ofMinutes(1)))
                 .subscribe(
                     result -> log.debug("Message routed: {}", result),
                     error -> log.error("Fatal error in routing for adapter={}", adapter.channelType(), error)

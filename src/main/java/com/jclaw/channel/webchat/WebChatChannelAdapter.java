@@ -69,6 +69,8 @@ public class WebChatChannelAdapter implements ChannelAdapter {
         Sinks.Many<OutboundMessage> sink = Sinks.many().multicast().onBackpressureBuffer();
         clientSinks.put(conversationId, sink);
         return sink.asFlux()
-                .doOnCancel(() -> clientSinks.remove(conversationId));
+                .doOnCancel(() -> clientSinks.remove(conversationId))
+                .doOnError(e -> clientSinks.remove(conversationId))
+                .doOnTerminate(() -> clientSinks.remove(conversationId));
     }
 }

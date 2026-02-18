@@ -54,5 +54,5 @@ jclaw:
         - "\\b\\d{16}\\b"
         - "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
     data-residency:
-      region: us
+      region: ${CF_REGION:us}
   agents: []

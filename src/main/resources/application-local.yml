@@ -14,7 +14,7 @@ spring:
           sso:
             client-id: ${SSO_CLIENT_ID:jclaw-local}
             client-secret: ${SSO_CLIENT_SECRET:jclaw-local-secret}
-            scope: openid,profile,email,roles,jclaw.admin,jclaw.operator,jclaw.user
+            scope: openid,profile,email,roles,jclaw.admin,jclaw.operator,jclaw.user,jclaw.service
             authorization-grant-type: authorization_code
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
         provider:
