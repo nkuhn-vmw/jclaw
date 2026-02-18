@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.tool.ToolCallback;
@@ -95,16 +96,20 @@ public class AgentRuntime {
         .subscribeOn(Schedulers.boundedElastic())
         .flatMapMany(ctx -> {
             Timer.Sample sample = metrics.startLlmTimer();
+
+            // 6. Resolve model through ModelRouter (validates model exists in registry)
+            ChatModel resolvedModel = modelRouter.resolveModel(context.agentId(), ctx.config());
             String modelName = ctx.config().getModel() != null ? ctx.config().getModel() : "default";
 
             // Record LLM request metric
             metrics.recordLlmRequest(modelName, context.agentId());
 
-            // 6. Build ChatClient using the injected builder (preserves auto-config advisors)
-            //    The model is resolved via ModelRouter and applied through prompt options
-            ChatClient chatClient = chatClientBuilder.build();
+            // 7. Build ChatClient — use resolved model if different from default
+            ChatClient chatClient = (resolvedModel != modelRouter.getDefaultModel())
+                    ? ChatClient.builder(resolvedModel).build()
+                    : chatClientBuilder.build();
 
-            // 7. Configure request with maxTokens and model from agent config
+            // 8. Configure request with maxTokens and model from agent config
             AnthropicChatOptions.Builder optionsBuilder = AnthropicChatOptions.builder()
                     .maxTokens(ctx.config().getMaxTokensPerRequest());
             if (ctx.config().getModel() != null) {
@@ -129,9 +134,12 @@ public class AgentRuntime {
                 .doOnComplete(() -> {
                     metrics.stopLlmTimer(sample, modelName, context.agentId());
 
-                    // Store assistant response in session
+                    // Store assistant response and apply egress guard
                     String fullResponse = responseAccumulator.toString();
                     if (!fullResponse.isEmpty()) {
+                        // 9. Egress guard: filter outbound content before delivery
+                        contentFilterChain.filterOutbound(fullResponse, context);
+
                         sessionManager.addMessage(ctx.session().getId(), MessageRole.ASSISTANT,
                                 fullResponse, estimateTokens(fullResponse));
                     }

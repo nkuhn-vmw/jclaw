@@ -1,5 +1,7 @@
 package com.jclaw.session;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jclaw.agent.AgentContext;
 import com.jclaw.audit.AuditService;
 import com.jclaw.channel.InboundMessage;
@@ -23,25 +25,31 @@ public class SessionManager {
     private static final String HISTORY_CACHE_PREFIX = "jclaw:session:history:";
     private static final Duration HISTORY_CACHE_TTL = Duration.ofMinutes(30);
 
+    private static final TypeReference<List<CachedMessage>> CACHED_MSG_LIST_TYPE =
+            new TypeReference<>() {};
+
     private final SessionRepository sessionRepository;
     private final SessionMessageRepository messageRepository;
     private final AuditService auditService;
     private final JclawProperties properties;
     private final JclawMetrics metrics;
     private final ReactiveRedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     public SessionManager(SessionRepository sessionRepository,
                          SessionMessageRepository messageRepository,
                          AuditService auditService,
                          JclawProperties properties,
                          JclawMetrics metrics,
-                         ReactiveRedisTemplate<String, String> redisTemplate) {
+                         ReactiveRedisTemplate<String, String> redisTemplate,
+                         ObjectMapper objectMapper) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.auditService = auditService;
         this.properties = properties;
         this.metrics = metrics;
         this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @Observed(name = "jclaw.session.resolve", contextualName = "session-resolve")
@@ -110,10 +118,12 @@ public class SessionManager {
         // Try to read cached history from Redis
         try {
             String cached = redisTemplate.opsForValue().get(cacheKey).block();
-            if (cached != null) {
-                log.debug("Session history cache hit for {}", sessionId);
-                // Cache stores message count only as a staleness indicator;
-                // on cache hit we still query DB but benefit from connection pool warmth
+            if (cached != null && !cached.isEmpty()) {
+                List<SessionMessage> fromCache = deserializeHistory(sessionId, cached);
+                if (fromCache != null) {
+                    log.debug("Session history cache hit for {} ({} messages)", sessionId, fromCache.size());
+                    return fromCache;
+                }
             }
         } catch (Exception e) {
             log.debug("Redis unavailable for session history cache, using DB directly");
@@ -122,10 +132,11 @@ public class SessionManager {
         List<SessionMessage> history = messageRepository
                 .findBySessionIdAndCompactedFalseOrderByCreatedAtAsc(sessionId);
 
-        // Store message count in Redis as a cache marker with TTL
+        // Cache serialized history in Redis with TTL
         try {
+            String serialized = serializeHistory(history);
             redisTemplate.opsForValue()
-                    .set(cacheKey, String.valueOf(history.size()), HISTORY_CACHE_TTL)
+                    .set(cacheKey, serialized, HISTORY_CACHE_TTL)
                     .subscribe();
         } catch (Exception e) {
             // Redis unavailable, continue without cache
@@ -165,4 +176,36 @@ public class SessionManager {
             // Redis unavailable
         }
     }
+
+    private String serializeHistory(List<SessionMessage> messages) {
+        try {
+            List<CachedMessage> cached = messages.stream()
+                    .map(m -> new CachedMessage(m.getId().toString(), m.getRole().name(),
+                            m.getContent(), m.getTokenCount(),
+                            m.getCreatedAt() != null ? m.getCreatedAt().toString() : null))
+                    .toList();
+            return objectMapper.writeValueAsString(cached);
+        } catch (Exception e) {
+            log.debug("Failed to serialize session history for cache", e);
+            return null;
+        }
+    }
+
+    private List<SessionMessage> deserializeHistory(UUID sessionId, String json) {
+        try {
+            List<CachedMessage> cached = objectMapper.readValue(json, CACHED_MSG_LIST_TYPE);
+            return cached.stream().map(c -> {
+                SessionMessage msg = new SessionMessage(sessionId,
+                        MessageRole.valueOf(c.role()), c.content());
+                msg.setTokenCount(c.tokenCount());
+                return msg;
+            }).toList();
+        } catch (Exception e) {
+            log.debug("Failed to deserialize session history from cache", e);
+            return null;
+        }
+    }
+
+    private record CachedMessage(String id, String role, String content,
+                                  Integer tokenCount, String createdAt) {}
 }

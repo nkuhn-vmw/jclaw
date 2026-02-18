@@ -2,6 +2,7 @@ package com.jclaw.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -30,13 +31,14 @@ public class SsoSecurityConfig {
         this.jwtConverter = jwtConverter;
     }
 
+    /**
+     * API and webhook filter chain — stateless JWT auth, no HTTP sessions.
+     */
     @Bean
-    public SecurityFilterChain webFilterChain(HttpSecurity http) throws Exception {
+    @Order(1)
+    public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
         return http
-                .oauth2Login(oauth2 -> oauth2
-                        .defaultSuccessUrl("/admin/dashboard")
-                        .failureUrl("/login?error=true")
-                )
+                .securityMatcher("/api/**", "/webhooks/**", "/actuator/**")
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))
                 )
@@ -44,9 +46,6 @@ public class SsoSecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/actuator/prometheus").permitAll()
                         .requestMatchers("/webhooks/**").permitAll()
-                        .requestMatchers("/admin/**").hasAuthority("SCOPE_jclaw.admin")
-                        .requestMatchers("/operator/**").hasAnyAuthority(
-                                "SCOPE_jclaw.admin", "SCOPE_jclaw.operator")
                         .requestMatchers("/api/admin/**").hasAuthority("SCOPE_jclaw.admin")
                         .requestMatchers("/api/agents/*/sessions/**").hasAnyAuthority(
                                 "SCOPE_jclaw.operator", "SCOPE_jclaw.admin")
@@ -63,8 +62,33 @@ public class SsoSecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-                .csrf(csrf -> csrf
-                        .ignoringRequestMatchers("/api/**", "/webhooks/**")
+                .csrf(csrf -> csrf.disable())
+                .build();
+    }
+
+    /**
+     * Web UI filter chain — OAuth2 login with session support for admin/operator dashboard.
+     */
+    @Bean
+    @Order(2)
+    public SecurityFilterChain webFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .oauth2Login(oauth2 -> oauth2
+                        .defaultSuccessUrl("/admin/dashboard")
+                        .failureUrl("/login?error=true")
+                )
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))
+                )
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/admin/**").hasAuthority("SCOPE_jclaw.admin")
+                        .requestMatchers("/operator/**").hasAnyAuthority(
+                                "SCOPE_jclaw.admin", "SCOPE_jclaw.operator")
+                        .anyRequest().authenticated()
+                )
+                .addFilterAfter(auditLogFilter, AuthorizationFilter.class)
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 )
                 .build();
     }

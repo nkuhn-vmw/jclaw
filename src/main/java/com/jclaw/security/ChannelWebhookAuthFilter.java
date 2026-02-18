@@ -97,6 +97,8 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
         }
 
         log.debug("Webhook authenticated for channel: {}", channelType);
+        auditService.logAuth("webhook:" + channelType,
+                "WEBHOOK_AUTH " + channelType, "AUTH_SUCCESS", request.getRemoteAddr());
         filterChain.doFilter(wrappedRequest, response);
     }
 
