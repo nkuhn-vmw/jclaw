@@ -69,8 +69,9 @@ public class DataQueryTool implements ToolCallback {
             return "{\"error\": \"Semicolons are not allowed in queries\"}";
         }
 
-        // Strip string literals before checking for dangerous keywords to avoid false positives
-        String withoutStrings = trimmed.replaceAll("'[^']*'", "''");
+        // Strip SQL comments and string literals before checking for dangerous keywords
+        String withoutComments = trimmed.replaceAll("/\\*.*?\\*/", " ").replaceAll("--.*$", " ");
+        String withoutStrings = withoutComments.replaceAll("'[^']*'", "''");
         if (DANGEROUS_KEYWORD.matcher(withoutStrings).find()) {
             log.warn("Rejected query with dangerous keyword: {}", query);
             return "{\"error\": \"Query contains disallowed SQL keywords\"}";
@@ -142,7 +143,7 @@ public class DataQueryTool implements ToolCallback {
                 } else if (val instanceof Number) {
                     sb.append(val);
                 } else {
-                    sb.append("\"").append(val.toString().replace("\"", "\\\"")).append("\"");
+                    sb.append("\"").append(escapeJson(val.toString())).append("\"");
                 }
             }
             sb.append("}");

@@ -69,12 +69,18 @@ public class ChannelSendTool implements ToolCallback {
             adapter.sendMessage(new OutboundMessage(channel, conversationId, message)).block();
             log.info("Message sent via tool: channel={} conversation={}", channel, conversationId);
             return String.format("{\"status\":\"sent\",\"channel\":\"%s\",\"conversationId\":\"%s\"}",
-                    channel, conversationId);
+                    escapeJson(channel), escapeJson(conversationId));
         } catch (Exception e) {
             log.error("Failed to send message via tool", e);
             String errMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "send failed";
             return "{\"error\": \"" + errMsg + "\"}";
         }
+    }
+
+    private String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r");
     }
 
     @Override

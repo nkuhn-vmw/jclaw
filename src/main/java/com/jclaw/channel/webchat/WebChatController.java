@@ -28,6 +28,7 @@ public class WebChatController {
 
     // Track conversationId -> principal ownership to prevent cross-user SSE eavesdropping
     // Bounded to prevent unbounded memory growth; in multi-instance use Redis instead
+    private static final int MAX_MESSAGE_LENGTH = 10_000;
     private static final int MAX_CONVERSATION_OWNERS = 10_000;
     private final Map<String, String> conversationOwners = new ConcurrentHashMap<>();
 
@@ -44,6 +45,9 @@ public class WebChatController {
 
         if (text == null || text.isBlank()) {
             return Map.of("error", "message is required");
+        }
+        if (text.length() > MAX_MESSAGE_LENGTH) {
+            return Map.of("error", "message exceeds maximum length of " + MAX_MESSAGE_LENGTH + " characters");
         }
 
         String userId = auth.getName();

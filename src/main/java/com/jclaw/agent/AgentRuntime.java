@@ -129,6 +129,9 @@ public class AgentRuntime {
             int maxToolCalls = ctx.config().getMaxToolCallsPerRequest();
             StringBuffer responseAccumulator = new StringBuffer(); // thread-safe: publishOn may switch threads
 
+            // Resolve egress policy once per request (avoids per-chunk DB lookup)
+            var egressPolicy = contentFilterChain.resolvePolicy(context.agentId());
+
             return spec.stream().chatResponse()
                 .map(chatResponse -> toAgentResponse(
                         chatResponse, modelName, context.agentId(),
@@ -139,7 +142,7 @@ public class AgentRuntime {
                     // EgressGuard: check accumulated response inline to halt stream on violation (§5.4)
                     // Running per-chunk ensures ContentFilterException stops delivery mid-stream
                     // rather than firing post-delivery in doOnComplete where it would be inert
-                    contentFilterChain.filterOutbound(responseAccumulator.toString(), context);
+                    contentFilterChain.filterOutbound(responseAccumulator.toString(), context, egressPolicy);
                 })
                 .doOnComplete(() -> {
                     metrics.stopLlmTimer(sample, modelName, context.agentId());
@@ -166,10 +169,14 @@ public class AgentRuntime {
                         String partial = responseAccumulator.toString();
                         if (!partial.isEmpty()) {
                             try {
+                                // Egress guard: don't persist content that would be blocked
+                                contentFilterChain.filterOutbound(partial, context);
                                 sessionManager.addMessage(ctx.session().getId(),
                                         MessageRole.ASSISTANT, partial, estimateTokens(partial));
                                 log.debug("Stored partial response ({} chars) for cancelled stream",
                                         partial.length());
+                            } catch (ContentFilterChain.ContentFilterException e) {
+                                log.warn("Egress guard blocked partial response on cancel: {}", e.getMessage());
                             } catch (Exception e) {
                                 log.warn("Failed to store partial response on cancel", e);
                             }

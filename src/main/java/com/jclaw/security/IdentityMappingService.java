@@ -1,6 +1,7 @@
 package com.jclaw.security;
 
 import com.jclaw.audit.AuditService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,11 +20,14 @@ public class IdentityMappingService {
 
     private final IdentityMappingRepository repository;
     private final AuditService auditService;
+    private final ObjectMapper objectMapper;
 
     public IdentityMappingService(IdentityMappingRepository repository,
-                                  AuditService auditService) {
+                                  AuditService auditService,
+                                  ObjectMapper objectMapper) {
         this.repository = repository;
         this.auditService = auditService;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -67,9 +71,18 @@ public class IdentityMappingService {
         mapping.setApprovedBy(approvedBy);
         IdentityMapping saved = repository.save(mapping);
         auditService.logConfigChange(approvedBy, null, "IDENTITY_MAPPING_APPROVED",
-                "{\"mappingId\":\"" + mappingId + "\",\"principal\":\"" + mapping.getJclawPrincipal() + "\"}");
+                serializeSafe(java.util.Map.of("mappingId", mappingId.toString(),
+                        "principal", mapping.getJclawPrincipal())));
         log.info("Identity mapping approved: {} by {}", mappingId, approvedBy);
         return saved;
+    }
+
+    private String serializeSafe(java.util.Map<String, String> values) {
+        try {
+            return objectMapper.writeValueAsString(values);
+        } catch (Exception e) {
+            return "{}";
+        }
     }
 
     @PreAuthorize("hasAnyAuthority('SCOPE_jclaw.operator', 'SCOPE_jclaw.admin')")

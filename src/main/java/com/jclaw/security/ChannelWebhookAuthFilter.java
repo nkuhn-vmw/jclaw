@@ -335,7 +335,9 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
 
     private String extractChannelType(String path) {
         String[] parts = path.split("/");
-        return parts.length > 2 ? parts[2] : "unknown";
+        String raw = parts.length > 2 ? parts[2] : "unknown";
+        // Sanitize: only allow alphanumeric and hyphens to prevent audit log injection
+        return raw.replaceAll("[^a-zA-Z0-9\\-]", "");
     }
 
     private record CachedJwkSet(JWKSet jwkSet, long fetchedAt) {}

@@ -63,12 +63,24 @@ public class AgentConfigService {
         return agentConfigRepository.findAll();
     }
 
+    private static final int MIN_TOOL_CALLS = 1;
+    private static final int MAX_TOOL_CALLS = 100;
+    private static final int MIN_TOKENS = 256;
+    private static final int MAX_TOKENS = 200_000;
+
     @Transactional
     @PreAuthorize("hasAuthority('SCOPE_jclaw.admin')")
     public AgentConfig updateAgentConfig(String agentId, AgentConfig config) {
         String principal = getCurrentPrincipal();
         config.setAgentId(agentId);
         config.setUpdatedAt(Instant.now());
+
+        // Clamp safety-critical numeric bounds
+        if (config.getMaxToolCallsPerRequest() < MIN_TOOL_CALLS) config.setMaxToolCallsPerRequest(MIN_TOOL_CALLS);
+        if (config.getMaxToolCallsPerRequest() > MAX_TOOL_CALLS) config.setMaxToolCallsPerRequest(MAX_TOOL_CALLS);
+        if (config.getMaxTokensPerRequest() < MIN_TOKENS) config.setMaxTokensPerRequest(MIN_TOKENS);
+        if (config.getMaxTokensPerRequest() > MAX_TOKENS) config.setMaxTokensPerRequest(MAX_TOKENS);
+
         AgentConfig saved = agentConfigRepository.save(config);
         auditService.logConfigChange(principal, agentId, "AGENT_CONFIG_UPDATE",
                 serializeConfigDetails(agentId, config));

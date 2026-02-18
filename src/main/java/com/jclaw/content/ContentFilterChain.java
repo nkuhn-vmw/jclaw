@@ -65,7 +65,7 @@ public class ContentFilterChain {
         return current;
     }
 
-    private ContentFilterPolicy resolvePolicy(String agentId) {
+    public ContentFilterPolicy resolvePolicy(String agentId) {
         AgentConfig config = agentConfigService.getAgentConfig(agentId);
         if (config != null && config.getContentFilterPolicy() != null) {
             return config.getContentFilterPolicy();
@@ -78,7 +78,10 @@ public class ContentFilterChain {
      * Only runs the EgressGuard filter on outbound content.
      */
     public void filterOutbound(String content, AgentContext context) {
-        ContentFilterPolicy policy = resolvePolicy(context.agentId());
+        filterOutbound(content, context, resolvePolicy(context.agentId()));
+    }
+
+    public void filterOutbound(String content, AgentContext context, ContentFilterPolicy policy) {
         if (!policy.isEnableEgressGuard()) return;
 
         // Create a synthetic inbound message to reuse the EgressGuard filter

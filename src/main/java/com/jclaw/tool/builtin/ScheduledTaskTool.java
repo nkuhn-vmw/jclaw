@@ -59,6 +59,9 @@ public class ScheduledTaskTool implements ToolCallback {
         };
     }
 
+    private static final int MAX_NAME_LENGTH = 256;
+    private static final int MAX_MESSAGE_LENGTH = 1000;
+
     private String createTask(String toolInput) {
         String name = com.jclaw.tool.ToolInputParser.getString(toolInput, "name");
         String cron = com.jclaw.tool.ToolInputParser.getString(toolInput, "cron");
@@ -66,6 +69,13 @@ public class ScheduledTaskTool implements ToolCallback {
 
         if (name == null || cron == null) {
             return "{\"error\": \"name and cron are required for task creation\"}";
+        }
+
+        if (name.length() > MAX_NAME_LENGTH) {
+            return "{\"error\": \"Task name exceeds maximum length of " + MAX_NAME_LENGTH + " characters\"}";
+        }
+        if (message != null && message.length() > MAX_MESSAGE_LENGTH) {
+            return "{\"error\": \"Task message exceeds maximum length of " + MAX_MESSAGE_LENGTH + " characters\"}";
         }
 
         try {
@@ -102,7 +112,7 @@ public class ScheduledTaskTool implements ToolCallback {
                         if (callingAgent == null) {
                             return "{\"error\": \"Access denied: caller identity unknown\"}";
                         }
-                        if (task.getAgentId() != null && !callingAgent.equals(task.getAgentId())) {
+                        if (task.getAgentId() == null || !callingAgent.equals(task.getAgentId())) {
                             return "{\"error\": \"Access denied: task belongs to a different agent\"}";
                         }
                         task.setStatus(ScheduledTask.TaskStatus.CANCELLED);
