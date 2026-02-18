@@ -30,6 +30,12 @@ public class SecretsConfig {
     @Value("${vcap.services.jclaw-secrets.credentials.search-api-key:#{null}}")
     private String searchApiKey;
 
+    @Value("${jclaw.teams.app-id:#{null}}")
+    private String teamsAppId;
+
+    @Value("${jclaw.google-chat.project-number:#{null}}")
+    private String googleChatProjectNumber;
+
     public String getSlackBotToken() { return slackBotToken; }
     public String getSlackAppToken() { return slackAppToken; }
     public String getDiscordBotToken() { return discordBotToken; }
@@ -38,4 +44,6 @@ public class SecretsConfig {
     public String getSlackSigningSecret() { return slackSigningSecret; }
     public String getDiscordPublicKey() { return discordPublicKey; }
     public String getSearchApiKey() { return searchApiKey; }
+    public String getTeamsAppId() { return teamsAppId; }
+    public String getGoogleChatProjectNumber() { return googleChatProjectNumber; }
 }

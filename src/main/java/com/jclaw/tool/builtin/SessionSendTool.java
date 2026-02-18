@@ -42,9 +42,15 @@ public class SessionSendTool implements ToolCallback {
         try {
             UUID sessionId = UUID.fromString(sessionIdStr);
 
-            // Verify target session exists
-            if (sessionManager.getSession(sessionId) == null) {
+            // Verify target session exists and belongs to the same principal
+            com.jclaw.session.Session targetSession = sessionManager.getSession(sessionId);
+            if (targetSession == null) {
                 return "{\"error\": \"Target session not found: " + sessionIdStr + "\"}";
+            }
+            String callingPrincipal = MDC.get("principal");
+            if (callingPrincipal != null && targetSession.getPrincipal() != null
+                    && !callingPrincipal.equals(targetSession.getPrincipal())) {
+                return "{\"error\": \"Access denied: target session belongs to a different user\"}";
             }
 
             String senderAgent = MDC.get("agentId");

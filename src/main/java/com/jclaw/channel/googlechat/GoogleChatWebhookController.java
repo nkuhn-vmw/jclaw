@@ -41,9 +41,15 @@ public class GoogleChatWebhookController {
         Map<String, Object> sender = asMap(event.get("user"));
         Map<String, Object> space = asMap(event.get("space"));
 
-        String userId = sender != null ? (String) sender.get("name") : "unknown";
-        String spaceId = space != null ? (String) space.get("name") : "unknown";
+        String userId = sender != null ? (String) sender.get("name") : null;
+        String spaceId = space != null ? (String) space.get("name") : null;
         String text = messageObj != null ? (String) messageObj.getOrDefault("text", "") : "";
+
+        // Reject malformed events with missing identity fields
+        if (userId == null || userId.isBlank() || spaceId == null || spaceId.isBlank()) {
+            log.warn("Google Chat event rejected: missing userId or spaceId");
+            return ResponseEntity.badRequest().build();
+        }
 
         // Extract thread name for thread-based replies
         String threadName = null;

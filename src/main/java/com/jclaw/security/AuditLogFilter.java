@@ -5,6 +5,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -14,6 +16,8 @@ import java.io.IOException;
 
 @Component
 public class AuditLogFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(AuditLogFilter.class);
 
     private final AuditService auditService;
 
@@ -38,18 +42,22 @@ public class AuditLogFilter extends OncePerRequestFilter {
         String action = request.getMethod() + " " + path;
         String sourceIp = resolveClientIp(request);
 
-        // Log AUTH_SUCCESS for sensitive admin/operator paths (per spec §5.5)
-        if (status >= 200 && status < 300 && isSensitivePath(path)
-                && !"anonymous".equals(principal)) {
-            auditService.logAuth(principal, action, "AUTH_SUCCESS", sourceIp);
-            return;
+        try {
+            // Log AUTH_SUCCESS for sensitive admin/operator paths (per spec §5.5)
+            if (status >= 200 && status < 300 && isSensitivePath(path)
+                    && !"anonymous".equals(principal)) {
+                auditService.logAuth(principal, action, "AUTH_SUCCESS", sourceIp);
+            }
+
+            // Log authentication/authorization failures (401/403)
+            if (status == 401 || status == 403) {
+                String outcome = status == 401 ? "AUTH_FAILED" : "DENIED";
+                auditService.logAuth(principal, action, outcome, sourceIp);
+            }
+        } catch (Exception e) {
+            // Audit write failures must never prevent the security response from being delivered
+            log.warn("Failed to write audit log for {} {}: {}", request.getMethod(), path, e.getMessage());
         }
-
-        // Log authentication/authorization failures (401/403)
-        if (status != 401 && status != 403) return;
-
-        String outcome = status == 401 ? "AUTH_FAILED" : "DENIED";
-        auditService.logAuth(principal, action, outcome, sourceIp);
     }
 
     private boolean isSensitivePath(String path) {

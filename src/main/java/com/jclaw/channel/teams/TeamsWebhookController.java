@@ -34,9 +34,15 @@ public class TeamsWebhookController {
         Map<String, Object> from = asMap(activity.get("from"));
         Map<String, Object> conversation = asMap(activity.get("conversation"));
 
-        String userId = from != null ? (String) from.get("id") : "unknown";
-        String conversationId = conversation != null ? (String) conversation.get("id") : "unknown";
+        String userId = from != null ? (String) from.get("id") : null;
+        String conversationId = conversation != null ? (String) conversation.get("id") : null;
         String text = (String) activity.getOrDefault("text", "");
+
+        // Reject malformed activities with missing identity fields
+        if (userId == null || userId.isBlank() || conversationId == null || conversationId.isBlank()) {
+            log.warn("Teams activity rejected: missing userId or conversationId");
+            return ResponseEntity.badRequest().build();
+        }
 
         log.debug("Teams activity: type={} user={} conversation={}", type, userId, conversationId);
         teamsAdapter.processActivity(userId, conversationId, text, activity);

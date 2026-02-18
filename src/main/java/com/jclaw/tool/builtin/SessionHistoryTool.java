@@ -39,12 +39,17 @@ public class SessionHistoryTool implements ToolCallback {
 
             UUID sessionId = UUID.fromString(sessionIdStr);
 
-            // Verify the calling agent owns this session
+            // Verify the calling agent and principal own this session
             Session session = sessionManager.getSession(sessionId);
             if (session == null) return "{\"error\": \"Session not found\"}";
             String callingAgent = MDC.get("agentId");
             if (callingAgent != null && !callingAgent.equals(session.getAgentId())) {
                 return "{\"error\": \"Access denied: session belongs to a different agent\"}";
+            }
+            String callingPrincipal = MDC.get("principal");
+            if (callingPrincipal != null && session.getPrincipal() != null
+                    && !callingPrincipal.equals(session.getPrincipal())) {
+                return "{\"error\": \"Access denied: session belongs to a different user\"}";
             }
 
             List<SessionMessage> history = sessionManager.getHistory(sessionId);

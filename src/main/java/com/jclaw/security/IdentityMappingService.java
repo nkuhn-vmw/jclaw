@@ -30,7 +30,8 @@ public class IdentityMappingService {
     public Mono<String> resolvePrincipal(String channelType, String channelUserId) {
         return Mono.fromCallable(() ->
             repository.findByChannelTypeAndChannelUserId(channelType, channelUserId)
-                .filter(IdentityMapping::isApproved)
+                .filter(m -> m.isApproved() && m.getJclawPrincipal() != null
+                        && !m.getJclawPrincipal().isBlank())
                 .map(mapping -> {
                     mapping.setLastSeenAt(Instant.now());
                     repository.save(mapping);
@@ -65,10 +66,12 @@ public class IdentityMappingService {
         return saved;
     }
 
+    @PreAuthorize("hasAnyAuthority('SCOPE_jclaw.operator', 'SCOPE_jclaw.admin')")
     public List<IdentityMapping> getPendingMappings() {
         return repository.findByApprovedFalse();
     }
 
+    @PreAuthorize("hasAnyAuthority('SCOPE_jclaw.operator', 'SCOPE_jclaw.admin')")
     public List<IdentityMapping> getMappingsForPrincipal(String principal) {
         return repository.findByJclawPrincipal(principal);
     }

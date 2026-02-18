@@ -56,11 +56,21 @@ public class TeamsChannelAdapter implements ChannelAdapter {
         return messageSink.asFlux();
     }
 
+    private static final java.util.Set<String> ALLOWED_SERVICE_URL_HOSTS = java.util.Set.of(
+            "smba.trafficmanager.net", "teams.microsoft.com",
+            "botframework.com", "api.botframework.com");
+
     @Override
     public Mono<Void> sendMessage(OutboundMessage msg) {
         String serviceUrl = msg.metadata() != null
                 ? (String) msg.metadata().getOrDefault("serviceUrl", BOT_FRAMEWORK_API)
                 : BOT_FRAMEWORK_API;
+
+        // Validate serviceUrl against Bot Framework domain allowlist (prevent SSRF)
+        if (!isAllowedServiceUrl(serviceUrl)) {
+            log.warn("Teams serviceUrl rejected (not in allowlist): {}", serviceUrl);
+            return Mono.empty();
+        }
 
         Map<String, Object> activity = Map.of(
                 "type", "message",
@@ -144,6 +154,18 @@ public class TeamsChannelAdapter implements ChannelAdapter {
                     log.debug("Teams OAuth token acquired, expires at {}", expiresAt);
                     return token;
                 });
+    }
+
+    private boolean isAllowedServiceUrl(String url) {
+        try {
+            java.net.URI uri = java.net.URI.create(url);
+            String host = uri.getHost();
+            if (host == null) return false;
+            return ALLOWED_SERVICE_URL_HOSTS.stream()
+                    .anyMatch(allowed -> host.equals(allowed) || host.endsWith("." + allowed));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private record CachedToken(String token, Instant expiresAt) {

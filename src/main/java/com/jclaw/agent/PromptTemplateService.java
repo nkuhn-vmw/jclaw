@@ -53,6 +53,18 @@ public class PromptTemplateService {
 
         // Session history — enforce maxHistoryTokens by trimming oldest messages
         List<SessionMessage> history = sessionManager.getHistory(session.getId());
+
+        // Exclude the just-stored current user message from history to avoid double-injection
+        // (AgentRuntime stores the user message to DB before calling buildPrompt, so history
+        // already contains the current message — we add it explicitly below)
+        if (!history.isEmpty()) {
+            SessionMessage last = history.get(history.size() - 1);
+            if (last.getRole() == com.jclaw.session.MessageRole.USER
+                    && message.content().equals(last.getContent())) {
+                history = new ArrayList<>(history.subList(0, history.size() - 1));
+            }
+        }
+
         int tokenBudget = maxHistoryTokens;
         int currentUserTokens = estimateTokens(message.content());
         tokenBudget -= currentUserTokens;

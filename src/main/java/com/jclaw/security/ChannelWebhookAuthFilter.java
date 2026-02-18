@@ -154,6 +154,16 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
                 return false;
             }
 
+            // Verify audience matches our Teams app ID (prevents cross-bot token replay)
+            String expectedAppId = secretsConfig.getTeamsAppId();
+            if (expectedAppId != null && !expectedAppId.isEmpty()) {
+                java.util.List<String> audience = claims.getAudience();
+                if (audience == null || !audience.contains(expectedAppId)) {
+                    log.warn("Teams JWT audience mismatch: expected={} actual={}", expectedAppId, audience);
+                    return false;
+                }
+            }
+
             // Verify not expired
             if (claims.getExpirationTime() != null
                     && claims.getExpirationTime().before(new java.util.Date())) {
@@ -170,7 +180,7 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
 
     /**
      * Validates Google Chat JWT token against Google's public keys.
-     * Verifies signature, issuer (chat@system.gserviceaccount.com), and expiry.
+     * Verifies signature, issuer (chat@system.gserviceaccount.com), audience, and expiry.
      */
     private boolean verifyGoogleChatJwt(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
@@ -191,6 +201,16 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
             if (!GOOGLE_ISSUER.equals(issuer)) {
                 log.warn("Google Chat JWT issuer mismatch: expected={} actual={}", GOOGLE_ISSUER, issuer);
                 return false;
+            }
+
+            // Verify audience matches our Google Chat project number (prevents cross-project token replay)
+            String expectedProjectNumber = secretsConfig.getGoogleChatProjectNumber();
+            if (expectedProjectNumber != null && !expectedProjectNumber.isEmpty()) {
+                java.util.List<String> audience = claims.getAudience();
+                if (audience == null || !audience.contains(expectedProjectNumber)) {
+                    log.warn("Google Chat JWT audience mismatch: expected={} actual={}", expectedProjectNumber, audience);
+                    return false;
+                }
             }
 
             // Verify not expired

@@ -17,8 +17,11 @@ public class ToolPolicy {
         }
 
         // Explicit allow list overrides trust-level risk restrictions (per spec §5.3)
-        if (agentConfig.getAllowedTools() != null && !agentConfig.getAllowedTools().isEmpty()
-                && agentConfig.getAllowedTools().contains(toolName)) {
+        // but does NOT override the requiresApproval gate — that's a separate human-in-the-loop control
+        boolean explicitlyAllowed = agentConfig.getAllowedTools() != null
+                && !agentConfig.getAllowedTools().isEmpty()
+                && agentConfig.getAllowedTools().contains(toolName);
+        if (explicitlyAllowed && !requiresApproval) {
             return true;
         }
 
