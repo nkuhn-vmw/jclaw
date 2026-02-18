@@ -56,6 +56,7 @@ class AgentRuntimeTest {
         Session mockSession = new Session("agent1", "rest-api", "user@test.com", SessionScope.API);
         mockSession.setId(UUID.randomUUID());
 
+        when(contentFilterChain.filterInbound(message, context)).thenReturn(message);
         when(sessionManager.resolveSession(any(), any())).thenReturn(mockSession);
         when(agentConfigService.getOrCreateDefault("agent1")).thenReturn(new AgentConfig("agent1", "Test"));
         when(toolRegistry.resolveTools(any())).thenReturn(List.of());
@@ -75,6 +76,7 @@ class AgentRuntimeTest {
         Session mockSession = new Session("agent1", "rest-api", "user@test.com", SessionScope.API);
         mockSession.setId(UUID.randomUUID());
 
+        when(contentFilterChain.filterInbound(message, context)).thenReturn(message);
         when(sessionManager.resolveSession(any(), any())).thenReturn(mockSession);
         when(agentConfigService.getOrCreateDefault("agent1")).thenReturn(new AgentConfig("agent1", "Test"));
         when(toolRegistry.resolveTools(any())).thenReturn(List.of());

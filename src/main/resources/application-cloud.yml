@@ -1,6 +1,9 @@
 spring:
   datasource:
     # Auto-configured by java-cfenv from VCAP_SERVICES postgres binding
+    hikari:
+      data-source-properties:
+        stringtype: unspecified
   data:
     redis:
       # Auto-configured by java-cfenv from VCAP_SERVICES redis binding

@@ -2,8 +2,6 @@ package com.jclaw.agent;
 
 import com.jclaw.content.ContentFilterPolicy;
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
@@ -59,7 +57,6 @@ public class AgentConfig {
     @Embedded
     private ContentFilterPolicy contentFilterPolicy = new ContentFilterPolicy();
 
-    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "config_json", columnDefinition = "jsonb")
     private String configJson = "{}";
 

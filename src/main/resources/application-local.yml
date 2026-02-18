@@ -3,6 +3,9 @@ spring:
     url: jdbc:postgresql://localhost:5432/jclaw
     username: ${DB_USERNAME:jclaw}
     password: ${DB_PASSWORD:jclaw}
+    hikari:
+      data-source-properties:
+        stringtype: unspecified
   data:
     redis:
       host: ${REDIS_HOST:localhost}
