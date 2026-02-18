@@ -20,65 +20,43 @@ Think of it as the connective tissue between your AI models and the places your 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        INBOUND CHANNELS                            │
-│  ┌───────┐ ┌───────┐ ┌─────────┐ ┌────────────┐ ┌───────┐ ┌─────┐│
-│  │ Slack │ │ Teams │ │ Discord │ │Google Chat │ │WebChat│ │ REST││
-│  │Socket │ │Webhook│ │ Gateway │ │  Webhook   │ │  SSE  │ │ API ││
-│  └───┬───┘ └───┬───┘ └────┬────┘ └─────┬──────┘ └───┬───┘ └──┬──┘│
-└──────┼─────────┼──────────┼────────────┼─────────────┼────────┼───┘
-       │         │          │            │             │        │
-       ▼         ▼          ▼            ▼             ▼        ▼
-┌──────────────────────────────────────────────────────────────────┐
-│              ChannelWebhookAuthFilter                            │
-│   HMAC-SHA256 (Slack) │ JWT/JWKS (Teams/Google) │ Ed25519 (Discord)│
-└────────────────────────────┬─────────────────────────────────────┘
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                      ChannelRouter                               │
-│            Normalizes messages → InboundMessage                  │
-└────────────────────────────┬─────────────────────────────────────┘
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                  IdentityMappingService                           │
-│     Channel user ID → SSO principal (admin-approved mapping)     │
-└────────────────────────────┬─────────────────────────────────────┘
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                       AgentRuntime                               │
+Slack    Teams    Discord    Google Chat    WebChat    REST API
+  │        │         │            │            │          │
+  ▼        ▼         ▼            ▼            ▼          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   ChannelWebhookAuthFilter                       │
+│         HMAC-SHA256 / JWT+JWKS / Ed25519 signatures              │
+└───────────────────────────────┬─────────────────────────────────┘
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         ChannelRouter                            │
+│              Normalizes messages → InboundMessage                │
+└───────────────────────────────┬─────────────────────────────────┘
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     IdentityMappingService                       │
+│        Channel user ID → SSO principal (admin-approved)          │
+└───────────────────────────────┬─────────────────────────────────┘
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                          AgentRuntime                            │
 │                                                                  │
-│  ┌────────────────┐  ┌─────────────┐  ┌──────────────────────┐  │
-│  │ ContentFilter  │  │ ModelRouter  │  │    ToolRegistry      │  │
-│  │  Chain         │  │             │  │                      │  │
-│  │ ┌────────────┐ │  │ Resolves    │  │ ┌──────────────────┐ │  │
-│  │ │  Pattern   │ │  │ agent →     │  │ │   ToolPolicy     │ │  │
-│  │ │ Detection  │ │  │ ChatModel   │  │ │  (trust levels)  │ │  │
-│  │ ├────────────┤ │  │             │  │ └──────────────────┘ │  │
-│  │ │ Injection  │ │  │ ┌─────────┐ │  │                      │  │
-│  │ │ Detection  │ │  │ │Anthropic│ │  │ data_query           │  │
-│  │ ├────────────┤ │  │ │ OpenAI  │ │  │ http_fetch           │  │
-│  │ │  Input     │ │  │ │ GenAI   │ │  │ web_search           │  │
-│  │ │Sanitizer   │ │  │ └─────────┘ │  │ channel_send         │  │
-│  │ ├────────────┤ │  └─────────────┘  │ session_send         │  │
-│  │ │  Egress    │ │                   │ session_history       │  │
-│  │ │  Guard     │ │                   │ session_list          │  │
-│  │ └────────────┘ │                   │ scheduled_task        │  │
-│  └────────────────┘                   └──────────────────────┘  │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              ▼              ▼              ▼
-     ┌──────────────┐ ┌───────────┐ ┌────────────┐
-     │SessionManager│ │  Metrics  │ │   Audit    │
-     │              │ │Prometheus │ │   Service  │
-     └──────┬───────┘ │  OTel    │ └─────┬──────┘
-            │         └───────────┘       │
-     ┌──────┴───────┐              ┌──────┴──────┐
-     │    Redis     │              │ PostgreSQL  │
-     │  (sessions,  │              │ (sessions,  │
-     │   caching)   │              │  audit,     │
-     └──────────────┘              │  configs)   │
-                                   └─────────────┘
+│   ContentFilterChain      ModelRouter         ToolRegistry        │
+│   ├ PatternDetector       ├ Anthropic         ├ data_query       │
+│   ├ InjectionDetector     ├ OpenAI            ├ http_fetch       │
+│   ├ InputSanitizer        └ Tanzu GenAI       ├ web_search       │
+│   └ EgressGuard                               ├ channel_send     │
+│                                               ├ session_send     │
+│                                               ├ session_history  │
+│                                               ├ session_list     │
+│                                               └ scheduled_task   │
+└────────────┬──────────────────┬──────────────────┬──────────────┘
+             ▼                  ▼                  ▼
+      SessionManager        Metrics          AuditService
+      ┌──────────┐       ┌──────────┐       ┌────────────┐
+      │  Redis   │       │Prometheus│       │ PostgreSQL │
+      └──────────┘       │   OTel   │       └────────────┘
+                         └──────────┘
 ```
 
 ### Request Flow
