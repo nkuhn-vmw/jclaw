@@ -11,7 +11,9 @@ import org.slf4j.MDC;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Component;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
 import java.time.Duration;
 
@@ -32,7 +34,10 @@ public class HttpFetchTool implements ToolCallback {
 
     public HttpFetchTool(EgressAllowlistValidator egressValidator,
                         AgentConfigService agentConfigService) {
+        // Disable redirect following to prevent SSRF via redirect chain bypassing egress allowlist
         this.webClient = WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(
+                        HttpClient.create().followRedirect(false)))
                 .codecs(config -> config.defaultCodecs().maxInMemorySize(1024 * 1024))
                 .build();
         this.egressValidator = egressValidator;
@@ -68,8 +73,15 @@ public class HttpFetchTool implements ToolCallback {
 
             return body != null ? body : "{\"error\": \"Empty response\"}";
         } catch (Exception e) {
-            return "{\"error\": \"" + e.getMessage().replace("\"", "'") + "\"}";
+            String errMsg = e.getMessage() != null ? e.getMessage() : "fetch failed";
+            return "{\"error\": \"" + escapeJson(errMsg) + "\"}";
         }
+    }
+
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 
     @Override
