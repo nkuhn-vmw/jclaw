@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
         name = "data_query",
         description = "Query bound database services with read-only SQL queries.",
         riskLevel = RiskLevel.MEDIUM,
-        requiresApproval = true
+        requiresApproval = false
 )
 public class DataQueryTool implements ToolCallback {
 

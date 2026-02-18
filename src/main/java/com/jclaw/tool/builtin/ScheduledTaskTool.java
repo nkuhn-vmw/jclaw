@@ -85,7 +85,7 @@ public class ScheduledTaskTool implements ToolCallback {
     }
 
     @Transactional
-    private String cancelTask(String toolInput) {
+    String cancelTask(String toolInput) {
         String taskId = com.jclaw.tool.ToolInputParser.getString(toolInput, "taskId");
         if (taskId == null) return "{\"error\": \"taskId required\"}";
 

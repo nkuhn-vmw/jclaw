@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
 import java.util.*;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -116,16 +117,17 @@ public class ToolRegistry {
             MDC.put("agentId", context.agentId());
             MDC.put("principal", context.principal());
             MDC.put("channelType", context.channelType());
+            UUID sessionId = parseSessionId(MDC.get("sessionId"));
             try {
                 String result = delegate.call(toolInput);
                 auditService.logToolCall(context.principal(), context.agentId(),
-                        null, toolName, "SUCCESS",
+                        sessionId, toolName, "SUCCESS",
                         "{\"input_length\":" + (toolInput != null ? toolInput.length() : 0) + "}");
                 metrics.recordToolInvocation(toolName, context.agentId(), "success");
                 return result;
             } catch (Exception e) {
                 auditService.logToolCall(context.principal(), context.agentId(),
-                        null, toolName, "FAILURE",
+                        sessionId, toolName, "FAILURE",
                         "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}");
                 metrics.recordToolInvocation(toolName, context.agentId(), "failure");
                 throw e;
@@ -135,6 +137,15 @@ public class ToolRegistry {
         @Override
         public ToolDefinition getToolDefinition() {
             return delegate.getToolDefinition();
+        }
+
+        private static UUID parseSessionId(String value) {
+            if (value == null || value.isEmpty()) return null;
+            try {
+                return UUID.fromString(value);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
         }
     }
 }
