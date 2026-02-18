@@ -93,8 +93,9 @@ public class DataQueryTool implements ToolCallback {
                 conn.rollback(); // ensure no side effects
             }
         } catch (Exception e) {
-            log.error("Data query failed: {}", e.getMessage());
-            return "{\"error\": \"" + e.getMessage().replace("\"", "'") + "\"}";
+            String errMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "query execution failed";
+            log.error("Data query failed: {}", errMsg);
+            return "{\"error\": \"" + errMsg + "\"}";
         }
     }
 

@@ -16,21 +16,12 @@ public class ToolPolicy {
             return false;
         }
 
-        // Explicit allow list overrides trust-level risk restrictions (per spec §5.3)
-        // but does NOT override the requiresApproval gate — that's a separate human-in-the-loop control
-        boolean explicitlyAllowed = agentConfig.getAllowedTools() != null
-                && !agentConfig.getAllowedTools().isEmpty()
-                && agentConfig.getAllowedTools().contains(toolName);
-        if (explicitlyAllowed && !requiresApproval) {
-            return true;
-        }
-
-        // Trust level restrictions
+        // Trust level restrictions — enforced as a hard ceiling before allow-list
         AgentTrustLevel trustLevel = agentConfig.getTrustLevel();
 
         switch (trustLevel) {
             case RESTRICTED:
-                // RESTRICTED agents can only use LOW-risk tools
+                // RESTRICTED agents can only use LOW-risk tools — hard ceiling, allow-list cannot override
                 if (riskLevel != RiskLevel.LOW) return false;
                 break;
             case STANDARD:
@@ -45,6 +36,14 @@ public class ToolPolicy {
         // Tools that require human approval are blocked unless trust level is ELEVATED
         if (requiresApproval && trustLevel != AgentTrustLevel.ELEVATED) {
             return false;
+        }
+
+        // Explicit allow list overrides default tool routing (within trust-level ceiling above)
+        boolean explicitlyAllowed = agentConfig.getAllowedTools() != null
+                && !agentConfig.getAllowedTools().isEmpty()
+                && agentConfig.getAllowedTools().contains(toolName);
+        if (explicitlyAllowed) {
+            return true;
         }
 
         return true;

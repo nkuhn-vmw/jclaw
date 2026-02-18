@@ -127,7 +127,7 @@ public class AgentRuntime {
             // Track tool calls and accumulated response
             AtomicInteger toolCallCount = new AtomicInteger(0);
             int maxToolCalls = ctx.config().getMaxToolCallsPerRequest();
-            StringBuilder responseAccumulator = new StringBuilder();
+            StringBuffer responseAccumulator = new StringBuffer(); // thread-safe: publishOn may switch threads
 
             return spec.stream().chatResponse()
                 .map(chatResponse -> toAgentResponse(
@@ -213,7 +213,7 @@ public class AgentRuntime {
 
     private AgentResponse toAgentResponse(ChatResponse chatResponse, String modelName,
                                           String agentId, AtomicInteger toolCallCount,
-                                          int maxToolCalls, StringBuilder responseAccumulator) {
+                                          int maxToolCalls, StringBuffer responseAccumulator) {
         extractAndRecordTokenUsage(chatResponse, modelName, agentId);
 
         // Count tool calls and enforce limit

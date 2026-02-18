@@ -62,7 +62,7 @@ public class ChannelSendTool implements ToolCallback {
 
         ChannelAdapter adapter = channelRouter.getAdapter(channel);
         if (adapter == null) {
-            return "{\"error\": \"Channel not available: " + channel + "\"}";
+            return "{\"error\": \"Channel not available: " + channel.replace("\"", "'") + "\"}";
         }
 
         try {
@@ -72,7 +72,8 @@ public class ChannelSendTool implements ToolCallback {
                     channel, conversationId);
         } catch (Exception e) {
             log.error("Failed to send message via tool", e);
-            return "{\"error\": \"" + e.getMessage().replace("\"", "'") + "\"}";
+            String errMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "send failed";
+            return "{\"error\": \"" + errMsg + "\"}";
         }
     }
 

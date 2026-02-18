@@ -31,7 +31,7 @@ public class PatternDetector implements ContentFilter {
         String content = message.content();
         for (Pattern pattern : SUSPICIOUS_PATTERNS) {
             if (pattern.matcher(content).find()) {
-                return FilterResult.reject("Suspicious pattern detected: " + pattern.pattern());
+                return FilterResult.reject("Suspicious pattern detected in message");
             }
         }
         return FilterResult.pass();

@@ -27,7 +27,16 @@ public class EgressGuard implements ContentFilter {
 
     @Override
     public FilterResult filter(InboundMessage message, AgentContext context) {
+        return filter(message, context, null);
+    }
+
+    @Override
+    public FilterResult filter(InboundMessage message, AgentContext context, ContentFilterPolicy policy) {
         String content = message.content();
+
+        // Check URL patterns against egress allowlist if this is outbound content
+        // The allowlist is passed via policy's parent AgentConfig, but since ContentFilterChain
+        // resolves the policy, we check patterns here on all content
         for (Pattern pattern : EXFIL_PATTERNS) {
             if (pattern.matcher(content).find()) {
                 return FilterResult.reject("Potential data exfiltration attempt detected");

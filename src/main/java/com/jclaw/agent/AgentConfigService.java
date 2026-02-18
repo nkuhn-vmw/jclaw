@@ -46,8 +46,15 @@ public class AgentConfigService {
     public AgentConfig getOrCreateDefault(String agentId) {
         return agentConfigRepository.findById(agentId)
                 .orElseGet(() -> {
-                    AgentConfig config = new AgentConfig(agentId, agentId);
-                    return agentConfigRepository.save(config);
+                    try {
+                        AgentConfig config = new AgentConfig(agentId, agentId);
+                        return agentConfigRepository.save(config);
+                    } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                        // Concurrent creation race — re-fetch the row created by the other transaction
+                        return agentConfigRepository.findById(agentId)
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "Agent config disappeared after concurrent create for: " + agentId));
+                    }
                 });
     }
 

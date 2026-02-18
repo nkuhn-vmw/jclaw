@@ -97,6 +97,8 @@ public class AdminApiController {
     }
 
     // --- Audit Log ---
+    private static final int MAX_PAGE_SIZE = 200;
+
     @GetMapping("/audit")
     @PreAuthorize("hasAuthority('SCOPE_jclaw.admin')")
     public Page<AuditEvent> getAuditLog(
@@ -104,6 +106,8 @@ public class AdminApiController {
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String principal,
             @RequestParam(required = false) String eventType) {
+        if (size < 1) size = 1;
+        if (size > MAX_PAGE_SIZE) size = MAX_PAGE_SIZE;
         if (principal != null) {
             return auditService.findByPrincipal(principal, PageRequest.of(page, size));
         }

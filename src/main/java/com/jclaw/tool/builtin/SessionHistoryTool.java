@@ -43,8 +43,8 @@ public class SessionHistoryTool implements ToolCallback {
             Session session = sessionManager.getSession(sessionId);
             if (session == null) return "{\"error\": \"Session not found\"}";
             String callingAgent = MDC.get("agentId");
-            if (callingAgent != null && !callingAgent.equals(session.getAgentId())) {
-                return "{\"error\": \"Access denied: session belongs to a different agent\"}";
+            if (callingAgent == null || !callingAgent.equals(session.getAgentId())) {
+                return "{\"error\": \"Access denied: agent identity unknown or mismatched\"}";
             }
             // Enforce principal ownership: deny if calling principal is unknown (null MDC)
             // or mismatched, to prevent unauthenticated contexts from reading any session
