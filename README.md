@@ -24,39 +24,39 @@ Slack    Teams    Discord    Google Chat    WebChat    REST API
   │        │         │            │            │          │
   ▼        ▼         ▼            ▼            ▼          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   ChannelWebhookAuthFilter                       │
-│         HMAC-SHA256 / JWT+JWKS / Ed25519 signatures              │
-└───────────────────────────────┬─────────────────────────────────┘
-                                ▼
+│                     ChannelWebhookAuthFilter                    │
+│           HMAC-SHA256 / JWT+JWKS / Ed25519 signatures           │
+└────────────────────────────────┬────────────────────────────────┘
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                         ChannelRouter                            │
-│              Normalizes messages → InboundMessage                │
-└───────────────────────────────┬─────────────────────────────────┘
-                                ▼
+│                          ChannelRouter                          │
+│               Normalizes messages → InboundMessage              │
+└────────────────────────────────┬────────────────────────────────┘
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     IdentityMappingService                       │
-│        Channel user ID → SSO principal (admin-approved)          │
-└───────────────────────────────┬─────────────────────────────────┘
-                                ▼
+│                      IdentityMappingService                     │
+│         Channel user ID → SSO principal (admin-approved)        │
+└────────────────────────────────┬────────────────────────────────┘
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                          AgentRuntime                            │
-│                                                                  │
-│   ContentFilterChain      ModelRouter         ToolRegistry        │
-│   ├ PatternDetector       ├ Anthropic         ├ data_query       │
-│   ├ InjectionDetector     ├ OpenAI            ├ http_fetch       │
-│   ├ InputSanitizer        └ Tanzu GenAI       ├ web_search       │
-│   └ EgressGuard                               ├ channel_send     │
-│                                               ├ session_send     │
-│                                               ├ session_history  │
-│                                               ├ session_list     │
-│                                               └ scheduled_task   │
-└────────────┬──────────────────┬──────────────────┬──────────────┘
-             ▼                  ▼                  ▼
-      SessionManager        Metrics          AuditService
-      ┌──────────┐       ┌──────────┐       ┌────────────┐
-      │  Redis   │       │Prometheus│       │ PostgreSQL │
-      └──────────┘       │   OTel   │       └────────────┘
-                         └──────────┘
+│                           AgentRuntime                          │
+│                                                                 │
+│  ContentFilterChain    ModelRouter          ToolRegistry         │
+│  ├ PatternDetector     ├ Anthropic          ├ data_query        │
+│  ├ InjectionDetector   ├ OpenAI             ├ http_fetch        │
+│  ├ InputSanitizer      └ Tanzu GenAI        ├ web_search        │
+│  └ EgressGuard                              ├ channel_send      │
+│                                             ├ session_send      │
+│                                             ├ session_history   │
+│                                             ├ session_list      │
+│                                             └ scheduled_task    │
+└───────────┬────────────────────┬────────────────────┬───────────┘
+            ▼                    ▼                    ▼
+      SessionManager          Metrics            AuditService
+     ┌────────────┐       ┌────────────┐       ┌────────────┐
+     │   Redis    │       │ Prometheus │       │ PostgreSQL │
+     └────────────┘       │    OTel    │       └────────────┘
+                          └────────────┘
 ```
 
 ### Request Flow
