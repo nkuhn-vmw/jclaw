@@ -71,8 +71,14 @@ public class AdminApiController {
 
     @PostMapping("/identity-mappings/{id}/approve")
     @PreAuthorize("hasAnyAuthority('SCOPE_jclaw.operator', 'SCOPE_jclaw.admin')")
-    public IdentityMapping approveMapping(@PathVariable UUID id, Authentication auth) {
-        return identityMappingService.approveMapping(id, auth.getName());
+    public IdentityMapping approveMapping(@PathVariable UUID id,
+                                          @RequestBody java.util.Map<String, String> body,
+                                          Authentication auth) {
+        String jclawPrincipal = body != null ? body.get("jclawPrincipal") : null;
+        if (jclawPrincipal == null || jclawPrincipal.isBlank()) {
+            throw new IllegalArgumentException("jclawPrincipal is required for approval");
+        }
+        return identityMappingService.approveMapping(id, auth.getName(), jclawPrincipal);
     }
 
     // --- Sessions ---

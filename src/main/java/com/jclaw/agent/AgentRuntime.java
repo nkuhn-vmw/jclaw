@@ -77,19 +77,21 @@ public class AgentRuntime {
             Session session = sessionManager.resolveSession(context, message);
             MDC.put("sessionId", session.getId().toString());
 
-            // 2. Content filtering (throws ContentFilterException if rejected)
+            // 2. Resolve agent config first (needed for content filter policy and prompt)
+            AgentConfig config = agentConfigService.getOrCreateDefault(context.agentId());
+
+            // 3. Content filtering (throws ContentFilterException if rejected)
             // Returns sanitized message with cleaned content
             InboundMessage filtered = contentFilterChain.filterInbound(message, context);
 
-            // 3. Store user message (use sanitized content)
+            // 4. Store user message (use sanitized content)
             sessionManager.addMessage(session.getId(), MessageRole.USER,
                     filtered.content(), estimateTokens(filtered.content()));
 
-            // 4. Build prompt (use sanitized message)
+            // 5. Build prompt (use sanitized message — config is already resolved)
             Prompt prompt = promptService.buildPrompt(context, session, filtered);
 
-            // 5. Resolve agent config, model, and tools
-            AgentConfig config = agentConfigService.getOrCreateDefault(context.agentId());
+            // 6. Resolve tools for this agent
             List<ToolCallback> tools = toolRegistry.resolveTools(context);
 
             return new LlmCallContext(session, prompt, tools, config);

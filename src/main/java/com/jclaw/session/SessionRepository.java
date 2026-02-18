@@ -30,4 +30,7 @@ public interface SessionRepository extends JpaRepository<Session, UUID> {
     List<Session> findByStatus(SessionStatus status);
 
     List<Session> findByStatusAndLastActiveAtBefore(SessionStatus status, Instant cutoff);
+
+    List<Session> findByStatusInAndLastActiveAtBefore(
+            java.util.Collection<SessionStatus> statuses, Instant cutoff);
 }

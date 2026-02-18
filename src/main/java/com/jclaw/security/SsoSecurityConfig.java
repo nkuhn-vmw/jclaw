@@ -44,7 +44,6 @@ public class SsoSecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers("/actuator/prometheus").permitAll()
                         .requestMatchers("/webhooks/**").permitAll()
                         .requestMatchers("/api/admin/**").hasAuthority("SCOPE_jclaw.admin")
                         .requestMatchers("/api/agents/*/sessions/**").hasAnyAuthority(

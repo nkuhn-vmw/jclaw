@@ -156,12 +156,14 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
 
             // Verify audience matches our Teams app ID (prevents cross-bot token replay)
             String expectedAppId = secretsConfig.getTeamsAppId();
-            if (expectedAppId != null && !expectedAppId.isEmpty()) {
-                java.util.List<String> audience = claims.getAudience();
-                if (audience == null || !audience.contains(expectedAppId)) {
-                    log.warn("Teams JWT audience mismatch: expected={} actual={}", expectedAppId, audience);
-                    return false;
-                }
+            if (expectedAppId == null || expectedAppId.isEmpty()) {
+                log.error("Teams app ID not configured — JWT audience cannot be validated. Rejecting.");
+                return false;
+            }
+            java.util.List<String> audience = claims.getAudience();
+            if (audience == null || !audience.contains(expectedAppId)) {
+                log.warn("Teams JWT audience mismatch: expected={} actual={}", expectedAppId, audience);
+                return false;
             }
 
             // Verify not expired
@@ -205,12 +207,14 @@ public class ChannelWebhookAuthFilter extends OncePerRequestFilter {
 
             // Verify audience matches our Google Chat project number (prevents cross-project token replay)
             String expectedProjectNumber = secretsConfig.getGoogleChatProjectNumber();
-            if (expectedProjectNumber != null && !expectedProjectNumber.isEmpty()) {
-                java.util.List<String> audience = claims.getAudience();
-                if (audience == null || !audience.contains(expectedProjectNumber)) {
-                    log.warn("Google Chat JWT audience mismatch: expected={} actual={}", expectedProjectNumber, audience);
-                    return false;
-                }
+            if (expectedProjectNumber == null || expectedProjectNumber.isEmpty()) {
+                log.error("Google Chat project number not configured — JWT audience cannot be validated. Rejecting.");
+                return false;
+            }
+            java.util.List<String> audience = claims.getAudience();
+            if (audience == null || !audience.contains(expectedProjectNumber)) {
+                log.warn("Google Chat JWT audience mismatch: expected={} actual={}", expectedProjectNumber, audience);
+                return false;
             }
 
             // Verify not expired

@@ -21,6 +21,8 @@ public class IdentityMapping {
     private String channelUserId;
 
     @Column(name = "jclaw_principal", length = 256)
+    // Note: nullable at JPA level because unmapped identities are created with null principal
+    // and filled in during admin approval. resolvePrincipal() enforces non-null.
     private String jclawPrincipal;
 
     @Column(name = "display_name", length = 256)

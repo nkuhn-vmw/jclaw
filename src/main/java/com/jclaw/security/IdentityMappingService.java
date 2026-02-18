@@ -54,9 +54,13 @@ public class IdentityMappingService {
 
     @Transactional
     @PreAuthorize("hasAnyAuthority('SCOPE_jclaw.operator', 'SCOPE_jclaw.admin')")
-    public IdentityMapping approveMapping(UUID mappingId, String approvedBy) {
+    public IdentityMapping approveMapping(UUID mappingId, String approvedBy, String jclawPrincipal) {
+        if (jclawPrincipal == null || jclawPrincipal.isBlank()) {
+            throw new IllegalArgumentException("jclawPrincipal must not be null or blank");
+        }
         IdentityMapping mapping = repository.findById(mappingId)
                 .orElseThrow(() -> new IllegalArgumentException("Mapping not found: " + mappingId));
+        mapping.setJclawPrincipal(jclawPrincipal);
         mapping.setApproved(true);
         mapping.setApprovedBy(approvedBy);
         IdentityMapping saved = repository.save(mapping);

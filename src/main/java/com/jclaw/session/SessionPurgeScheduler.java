@@ -60,8 +60,10 @@ public class SessionPurgeScheduler {
         int idleMinutes = properties.getSession().getIdleTimeoutMinutes();
         Instant cutoff = Instant.now().minus(idleMinutes, ChronoUnit.MINUTES);
 
+        // Archive both ACTIVE and COMPACTED sessions that have gone idle
         List<Session> idleSessions = sessionRepository
-                .findByStatusAndLastActiveAtBefore(SessionStatus.ACTIVE, cutoff);
+                .findByStatusInAndLastActiveAtBefore(
+                        List.of(SessionStatus.ACTIVE, SessionStatus.COMPACTED), cutoff);
 
         for (Session session : idleSessions) {
             sessionManager.archiveSession(session.getId());
