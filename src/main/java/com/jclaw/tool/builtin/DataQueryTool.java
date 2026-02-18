@@ -119,9 +119,11 @@ public class DataQueryTool implements ToolCallback {
                 conn.rollback(); // ensure no side effects
             }
         } catch (Exception e) {
-            String errMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "query execution failed";
-            log.error("Data query failed: {}", errMsg);
-            return "{\"error\": \"" + errMsg + "\"}";
+            String rawMsg = e.getMessage() != null ? e.getMessage() : "query execution failed";
+            log.error("Data query failed: {}", rawMsg);
+            // Truncate to limit schema info disclosure, then escape for valid JSON
+            String errMsg = rawMsg.length() > 200 ? rawMsg.substring(0, 200) + "..." : rawMsg;
+            return "{\"error\": \"" + escapeJson(errMsg) + "\"}";
         }
     }
 

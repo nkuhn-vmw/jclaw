@@ -69,7 +69,7 @@ public class ModelRouter {
         return null;
     }
 
-    public void registerModel(String modelId, ChatModel model) {
+    void registerModel(String modelId, ChatModel model) {
         modelRegistry.put(modelId, model);
     }
 

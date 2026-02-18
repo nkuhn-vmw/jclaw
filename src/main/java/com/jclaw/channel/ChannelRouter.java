@@ -81,7 +81,12 @@ public class ChannelRouter {
         Mono<String> principalMono;
         if ("webchat".equals(message.channelType())) {
             // WebChat users provide their principal directly via channelUserId (SSO identity)
-            principalMono = Mono.just(message.channelUserId());
+            String uid = message.channelUserId();
+            if (uid == null || uid.isBlank()) {
+                log.error("WebChat message missing channelUserId, dropping");
+                return Mono.empty();
+            }
+            principalMono = Mono.just(uid);
         } else {
             principalMono = Mono.fromCallable(() ->
                     identityMappingService.resolvePrincipal(

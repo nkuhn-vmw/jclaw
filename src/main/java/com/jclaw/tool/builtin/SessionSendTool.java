@@ -88,9 +88,15 @@ public class SessionSendTool implements ToolCallback {
         } catch (IllegalArgumentException e) {
             return "{\"error\": \"Invalid sessionId format\"}";
         } catch (Exception e) {
-            String errMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "send failed";
-            return "{\"error\": \"" + errMsg + "\"}";
+            String errMsg = e.getMessage() != null ? e.getMessage() : "send failed";
+            return "{\"error\": \"" + escapeJson(errMsg) + "\"}";
         }
+    }
+
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 
     @Override

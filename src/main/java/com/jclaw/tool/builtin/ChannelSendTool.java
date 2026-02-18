@@ -72,8 +72,8 @@ public class ChannelSendTool implements ToolCallback {
                     escapeJson(channel), escapeJson(conversationId));
         } catch (Exception e) {
             log.error("Failed to send message via tool", e);
-            String errMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "send failed";
-            return "{\"error\": \"" + errMsg + "\"}";
+            String errMsg = e.getMessage() != null ? e.getMessage() : "send failed";
+            return "{\"error\": \"" + escapeJson(errMsg) + "\"}";
         }
     }
 
