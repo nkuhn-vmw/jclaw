@@ -102,6 +102,6 @@ public class AdminApiController {
         if (eventType != null) {
             return auditService.findByEventType(eventType, PageRequest.of(page, size));
         }
-        return auditService.findByPrincipal("", PageRequest.of(page, size));
+        return auditService.findAll(PageRequest.of(page, size));
     }
 }

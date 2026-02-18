@@ -14,8 +14,14 @@ public interface SessionRepository extends JpaRepository<Session, UUID> {
     Optional<Session> findByAgentIdAndPrincipalAndScopeAndStatus(
             String agentId, String principal, SessionScope scope, SessionStatus status);
 
+    Optional<Session> findByAgentIdAndPrincipalAndScopeAndStatusIn(
+            String agentId, String principal, SessionScope scope, java.util.Collection<SessionStatus> statuses);
+
     Optional<Session> findByAgentIdAndChannelTypeAndChannelConversationIdAndStatus(
             String agentId, String channelType, String conversationId, SessionStatus status);
+
+    Optional<Session> findByAgentIdAndChannelTypeAndChannelConversationIdAndStatusIn(
+            String agentId, String channelType, String conversationId, java.util.Collection<SessionStatus> statuses);
 
     List<Session> findByPrincipalAndStatus(String principal, SessionStatus status);
 

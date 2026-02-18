@@ -56,18 +56,19 @@ public class SessionManager {
     @Transactional
     public Session resolveSession(AgentContext context, InboundMessage message) {
         SessionScope scope = resolveScope(message);
+        var activeStatuses = List.of(SessionStatus.ACTIVE, SessionStatus.COMPACTED);
 
         if (scope == SessionScope.GROUP && message.conversationId() != null) {
             return sessionRepository
-                    .findByAgentIdAndChannelTypeAndChannelConversationIdAndStatus(
+                    .findByAgentIdAndChannelTypeAndChannelConversationIdAndStatusIn(
                             context.agentId(), message.channelType(),
-                            message.conversationId(), SessionStatus.ACTIVE)
+                            message.conversationId(), activeStatuses)
                     .orElseGet(() -> createSession(context, message, scope));
         }
 
         return sessionRepository
-                .findByAgentIdAndPrincipalAndScopeAndStatus(
-                        context.agentId(), context.principal(), scope, SessionStatus.ACTIVE)
+                .findByAgentIdAndPrincipalAndScopeAndStatusIn(
+                        context.agentId(), context.principal(), scope, activeStatuses)
                 .orElseGet(() -> createSession(context, message, scope));
     }
 

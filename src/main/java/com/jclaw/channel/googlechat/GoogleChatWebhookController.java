@@ -57,7 +57,8 @@ public class GoogleChatWebhookController {
         log.debug("Google Chat event: type={} user={} space={} thread={}", type, userId, spaceId, threadName);
         googleChatAdapter.processEvent(userId, spaceId, text, threadName, event);
 
-        return ResponseEntity.ok(Map.of("text", "Processing your request..."));
+        // Return empty body to avoid double-message (async adapter sends the real reply)
+        return ResponseEntity.ok().build();
     }
 
     @SuppressWarnings("unchecked")

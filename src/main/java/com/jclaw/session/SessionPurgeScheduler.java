@@ -18,15 +18,18 @@ public class SessionPurgeScheduler {
     private static final Logger log = LoggerFactory.getLogger(SessionPurgeScheduler.class);
 
     private final SessionRepository sessionRepository;
+    private final SessionMessageRepository messageRepository;
     private final SessionManager sessionManager;
     private final AuditRepository auditRepository;
     private final JclawProperties properties;
 
     public SessionPurgeScheduler(SessionRepository sessionRepository,
+                                SessionMessageRepository messageRepository,
                                 SessionManager sessionManager,
                                 AuditRepository auditRepository,
                                 JclawProperties properties) {
         this.sessionRepository = sessionRepository;
+        this.messageRepository = messageRepository;
         this.sessionManager = sessionManager;
         this.auditRepository = auditRepository;
         this.properties = properties;
@@ -42,6 +45,8 @@ public class SessionPurgeScheduler {
                 .findByStatusAndLastActiveAtBefore(SessionStatus.ARCHIVED, cutoff);
 
         for (Session session : expiredSessions) {
+            // Delete session messages before purging the session
+            messageRepository.deleteBySessionId(session.getId());
             session.setStatus(SessionStatus.PURGED);
             sessionRepository.save(session);
         }

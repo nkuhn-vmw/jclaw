@@ -16,8 +16,12 @@ public interface ContentFilter {
 
     FilterResult filter(InboundMessage message, AgentContext context);
 
-    record FilterResult(boolean passed, String reason) {
-        public static FilterResult pass() { return new FilterResult(true, null); }
-        public static FilterResult reject(String reason) { return new FilterResult(false, reason); }
+    record FilterResult(boolean passed, String reason, String sanitizedContent) {
+        public FilterResult(boolean passed, String reason) {
+            this(passed, reason, null);
+        }
+        public static FilterResult pass() { return new FilterResult(true, null, null); }
+        public static FilterResult pass(String sanitizedContent) { return new FilterResult(true, null, sanitizedContent); }
+        public static FilterResult reject(String reason) { return new FilterResult(false, reason, null); }
     }
 }

@@ -21,16 +21,22 @@ public class InputSanitizer implements ContentFilter {
             return FilterResult.reject("Empty message content");
         }
 
-        // Check for control characters (except common whitespace)
+        // Strip control characters (except common whitespace) instead of rejecting
+        StringBuilder cleaned = new StringBuilder(content.length());
         for (char c : content.toCharArray()) {
-            if (Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t') {
-                return FilterResult.reject("Message contains control characters");
+            if (!Character.isISOControl(c) || c == '\n' || c == '\r' || c == '\t') {
+                cleaned.append(c);
             }
+        }
+        String sanitized = cleaned.toString();
+
+        if (sanitized.isBlank()) {
+            return FilterResult.reject("Message contains only control characters");
         }
 
         // Check for unicode normalization issues (homoglyph attacks)
-        String normalized = Normalizer.normalize(content, Normalizer.Form.NFC);
-        if (normalized.length() > content.length() * 2) {
+        String normalized = Normalizer.normalize(sanitized, Normalizer.Form.NFC);
+        if (normalized.length() > sanitized.length() * 2) {
             return FilterResult.reject("Suspicious unicode content detected");
         }
 

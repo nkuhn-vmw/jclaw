@@ -86,10 +86,10 @@ class ContentFilterChainTest {
     }
 
     @Test
-    void controlCharactersAreRejected() {
+    void controlCharactersAreStrippedNotRejected() {
         InboundMessage msg = new InboundMessage("rest-api", "user1", "conv1",
                 "Hello\u0000World");
-        assertThrows(ContentFilterChain.ContentFilterException.class,
-                () -> filterChain.filterInbound(msg, context));
+        // Control chars are now stripped instead of rejected
+        assertDoesNotThrow(() -> filterChain.filterInbound(msg, context));
     }
 }

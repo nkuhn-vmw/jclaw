@@ -1,11 +1,15 @@
 package com.jclaw.tool.builtin;
 
+import com.jclaw.agent.AgentContext;
+import com.jclaw.agent.AgentRuntime;
+import com.jclaw.channel.InboundMessage;
 import com.jclaw.tool.JclawTool;
 import com.jclaw.tool.RiskLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
@@ -30,9 +34,12 @@ public class ScheduledTaskTool implements ToolCallback {
     private static final Logger log = LoggerFactory.getLogger(ScheduledTaskTool.class);
 
     private final ScheduledTaskRepository taskRepository;
+    private final AgentRuntime agentRuntime;
 
-    public ScheduledTaskTool(ScheduledTaskRepository taskRepository) {
+    public ScheduledTaskTool(ScheduledTaskRepository taskRepository,
+                             @Lazy AgentRuntime agentRuntime) {
         this.taskRepository = taskRepository;
+        this.agentRuntime = agentRuntime;
     }
 
     @Override
@@ -125,6 +132,25 @@ public class ScheduledTaskTool implements ToolCallback {
             log.info("Scheduled task fired: id={} name={} message={}",
                     task.getId(), task.getName(), task.getMessage());
             task.setLastFiredAt(Instant.now());
+
+            // Dispatch the task message to the agent for processing
+            try {
+                String agentId = task.getAgentId() != null ? task.getAgentId() : "default";
+                String principal = task.getPrincipal() != null ? task.getPrincipal() : "scheduler";
+                InboundMessage inbound = new InboundMessage(
+                        "scheduled-task", principal, null, null,
+                        task.getMessage(), null, Instant.now());
+                AgentContext context = new AgentContext(agentId, principal, "scheduled-task");
+                agentRuntime.processMessage(context, inbound)
+                        .collectList()
+                        .subscribe(
+                                responses -> log.info("Scheduled task {} dispatched, got {} responses",
+                                        task.getId(), responses.size()),
+                                error -> log.error("Scheduled task {} dispatch failed: {}",
+                                        task.getId(), error.getMessage()));
+            } catch (Exception e) {
+                log.error("Failed to dispatch scheduled task {}: {}", task.getId(), e.getMessage());
+            }
 
             // Calculate next fire time
             try {

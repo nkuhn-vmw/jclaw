@@ -144,17 +144,26 @@ public class AgentRuntime {
                                 fullResponse, estimateTokens(fullResponse));
                     }
 
-                    // Record message processed metric (OBS-001)
-                    metrics.recordMessageProcessed(context.channelType(), context.agentId());
+                    // Record message processed metric with outcome (OBS-001)
+                    metrics.recordMessageProcessed(context.channelType(), context.agentId(), "success");
 
                     auditService.logSessionEvent("MESSAGE_PROCESSED", context.principal(),
                             context.agentId(), ctx.session().getId(), "Message processed");
                 })
                 .doFinally(signal -> MDC.clear());
         })
+        .onErrorResume(ContentFilterChain.ContentFilterException.class, e -> {
+            log.warn("Content filtered for agent={} principal={}: {}",
+                    context.agentId(), context.principal(), e.getMessage());
+            metrics.recordMessageProcessed(context.channelType(), context.agentId(), "filtered");
+            MDC.clear();
+            return Flux.just(new AgentResponse(
+                    "Your message was filtered: " + e.getMessage()));
+        })
         .onErrorResume(e -> {
             log.error("Error processing message for agent={} principal={}",
                     context.agentId(), context.principal(), e);
+            metrics.recordMessageProcessed(context.channelType(), context.agentId(), "error");
             MDC.clear();
             return Flux.just(new AgentResponse(
                     "I encountered an error processing your request. Please try again."));

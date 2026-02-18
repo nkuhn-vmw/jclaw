@@ -114,6 +114,9 @@ public class DiscordChannelAdapter extends ListenerAdapter implements ChannelAda
                 }
             }
             MessageChannel channel = jda.getTextChannelById(msg.conversationId());
+            if (channel == null) {
+                channel = jda.getPrivateChannelById(msg.conversationId());
+            }
             if (channel != null) {
                 channel.sendMessage(msg.content()).queue();
             }
@@ -124,7 +127,11 @@ public class DiscordChannelAdapter extends ListenerAdapter implements ChannelAda
     public Mono<Void> sendTypingIndicator(String conversationId) {
         return Mono.fromRunnable(() -> {
             if (jda == null) return;
+            // Try guild text channel first, then fall back to private channel (DMs)
             MessageChannel channel = jda.getTextChannelById(conversationId);
+            if (channel == null) {
+                channel = jda.getPrivateChannelById(conversationId);
+            }
             if (channel != null) {
                 channel.sendTyping().queue();
             }

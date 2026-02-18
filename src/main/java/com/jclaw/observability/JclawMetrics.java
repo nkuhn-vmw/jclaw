@@ -31,10 +31,11 @@ public class JclawMetrics {
                 .register(registry).increment();
     }
 
-    public void recordMessageProcessed(String channel, String agent) {
+    public void recordMessageProcessed(String channel, String agent, String outcome) {
         Counter.builder("jclaw.messages.processed")
                 .tag("channel", channel)
                 .tag("agent", agent)
+                .tag("outcome", outcome)
                 .register(registry).increment();
     }
 

@@ -21,5 +21,7 @@ public interface SessionMessageRepository extends JpaRepository<SessionMessage, 
 
     long deleteBySessionIdAndCreatedAtBefore(UUID sessionId, Instant cutoff);
 
+    long deleteBySessionId(UUID sessionId);
+
     int countBySessionId(UUID sessionId);
 }

@@ -118,12 +118,13 @@ public class ChannelRouter {
                                 return sendChunked(adapter, message, combined, maxLen);
                             }
 
-                            // Propagate threadId from inbound to outbound message
+                            // Propagate threadId and metadata from inbound to outbound
                             return deliverWithRetry(adapter, new OutboundMessage(
                                     message.channelType(),
                                     message.conversationId(),
                                     message.threadId(),
-                                    combined, Map.of()));
+                                    combined,
+                                    message.metadata() != null ? message.metadata() : Map.of()));
                         })
                 );
             })
@@ -228,7 +229,8 @@ public class ChannelRouter {
                     message.channelType(),
                     message.conversationId(),
                     message.threadId(),
-                    chunk, Map.of())));
+                    chunk,
+                    message.metadata() != null ? message.metadata() : Map.of())));
         }
         return chain;
     }

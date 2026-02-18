@@ -77,6 +77,10 @@ public class AuditService {
                 .withOutcome(outcome));
     }
 
+    public Page<AuditEvent> findAll(Pageable pageable) {
+        return auditRepository.findAll(pageable);
+    }
+
     public Page<AuditEvent> findByPrincipal(String principal, Pageable pageable) {
         return auditRepository.findByPrincipalOrderByTimestampDesc(principal, pageable);
     }

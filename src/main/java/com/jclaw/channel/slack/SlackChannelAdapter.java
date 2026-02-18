@@ -86,11 +86,8 @@ public class SlackChannelAdapter implements ChannelAdapter {
                 var event = payload.getEvent();
                 Map<String, Object> metadata = new HashMap<>();
                 metadata.put("mentioned", true);
-                metadata.put("team", event.getChannel() != null ? "" : "");
-                // AppMentionEvent doesn't directly expose team, extract from context
-                if (payload.getTeamId() != null) {
-                    metadata.put("team", payload.getTeamId());
-                }
+                // Extract team from payload context
+                metadata.put("team", payload.getTeamId() != null ? payload.getTeamId() : "");
 
                 InboundMessage msg = new InboundMessage(
                         "slack", event.getUser(), event.getChannel(),
