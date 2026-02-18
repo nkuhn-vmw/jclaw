@@ -82,7 +82,7 @@ public class ScheduledTaskTool implements ToolCallback {
             log.info("Scheduled task created: id={} name={} cron={}", saved.getId(), name, cron);
             return String.format(
                     "{\"taskId\":\"%s\",\"name\":\"%s\",\"cron\":\"%s\",\"nextFireAt\":\"%s\",\"status\":\"scheduled\"}",
-                    saved.getId(), name, cron, nextFire);
+                    saved.getId(), escapeJson(name), escapeJson(cron), nextFire);
         } catch (IllegalArgumentException e) {
             return "{\"error\": \"Invalid cron expression: " + cron + "\"}";
         }
@@ -126,7 +126,7 @@ public class ScheduledTaskTool implements ToolCallback {
             first = false;
             sb.append(String.format(
                     "{\"taskId\":\"%s\",\"name\":\"%s\",\"cron\":\"%s\",\"nextFireAt\":\"%s\"}",
-                    task.getId(), task.getName(), task.getCronExpression(),
+                    task.getId(), escapeJson(task.getName()), escapeJson(task.getCronExpression()),
                     task.getNextFireAt() != null ? task.getNextFireAt() : ""));
         }
         sb.append("]");
@@ -201,6 +201,12 @@ public class ScheduledTaskTool implements ToolCallback {
 
             taskRepository.save(task);
         }
+    }
+
+    private String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r");
     }
 
     @Override

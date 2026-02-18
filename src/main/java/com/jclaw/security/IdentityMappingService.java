@@ -37,8 +37,10 @@ public class IdentityMappingService {
                     repository.save(mapping);
                     return mapping.getJclawPrincipal();
                 })
-                .orElseThrow(() -> new UnmappedIdentityException(
-                        "No approved mapping for " + channelType + ":" + channelUserId))
+                .orElseThrow(() -> {
+                    log.debug("No approved mapping for {}:{}", channelType, channelUserId);
+                    return new UnmappedIdentityException("No approved identity mapping found");
+                })
         );
     }
 

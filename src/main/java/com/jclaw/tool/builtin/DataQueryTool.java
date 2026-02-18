@@ -135,7 +135,7 @@ public class DataQueryTool implements ToolCallback {
             sb.append("{");
             for (int i = 1; i <= cols; i++) {
                 if (i > 1) sb.append(",");
-                sb.append("\"").append(meta.getColumnLabel(i)).append("\":");
+                sb.append("\"").append(escapeJson(meta.getColumnLabel(i))).append("\":");
                 Object val = rs.getObject(i);
                 if (val == null) {
                     sb.append("null");
@@ -149,6 +149,11 @@ public class DataQueryTool implements ToolCallback {
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    private String escapeJson(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r");
     }
 
 }

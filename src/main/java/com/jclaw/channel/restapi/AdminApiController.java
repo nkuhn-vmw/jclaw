@@ -114,6 +114,7 @@ public class AdminApiController {
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String principal,
             @RequestParam(required = false) String eventType) {
+        if (page < 0) page = 0;
         if (size < 1) size = 1;
         if (size > MAX_PAGE_SIZE) size = MAX_PAGE_SIZE;
         if (principal != null) {

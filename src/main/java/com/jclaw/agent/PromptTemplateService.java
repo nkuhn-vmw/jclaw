@@ -122,19 +122,22 @@ public class PromptTemplateService {
     }
 
     private String loadClasspathPrompt(String ref) {
-        return promptCache.computeIfAbsent(ref, path -> {
-            try {
-                ClassPathResource resource = new ClassPathResource(path);
-                if (resource.exists()) {
-                    String content = resource.getContentAsString(StandardCharsets.UTF_8);
-                    log.info("Loaded system prompt from classpath: {}", path);
-                    return content;
-                }
-            } catch (IOException e) {
-                log.warn("Failed to load system prompt from classpath: {}", path, e);
+        String cached = promptCache.get(ref);
+        if (cached != null) return cached;
+
+        try {
+            ClassPathResource resource = new ClassPathResource(ref);
+            if (resource.exists()) {
+                String content = resource.getContentAsString(StandardCharsets.UTF_8);
+                promptCache.put(ref, content);
+                log.info("Loaded system prompt from classpath: {}", ref);
+                return content;
             }
-            return getDefaultSystemPrompt();
-        });
+        } catch (IOException e) {
+            log.warn("Failed to load system prompt from classpath: {}", ref, e);
+        }
+        // Do not cache the fallback — allows retry on next call
+        return getDefaultSystemPrompt();
     }
 
     private String getDefaultSystemPrompt() {

@@ -81,7 +81,7 @@ public class AgentConfigService {
         String principal = getCurrentPrincipal();
         agentConfigRepository.deleteById(agentId);
         auditService.logConfigChange(principal, agentId, "AGENT_CONFIG_DELETE",
-                "{\"agentId\":\"" + agentId + "\"}");
+                serializeSafe(java.util.Map.of("agentId", agentId)));
     }
 
     private String getCurrentPrincipal() {
@@ -89,15 +89,19 @@ public class AgentConfigService {
         return auth != null ? auth.getName() : "system";
     }
 
-    private String serializeConfigDetails(String agentId, AgentConfig config) {
+    private String serializeSafe(java.util.Map<String, String> values) {
         try {
-            return objectMapper.writeValueAsString(java.util.Map.of(
-                    "agentId", agentId,
-                    "trustLevel", config.getTrustLevel().name(),
-                    "model", Optional.ofNullable(config.getModel()).orElse("default")
-            ));
+            return objectMapper.writeValueAsString(values);
         } catch (Exception e) {
-            return "{\"agentId\":\"" + agentId + "\"}";
+            return "{}";
         }
+    }
+
+    private String serializeConfigDetails(String agentId, AgentConfig config) {
+        return serializeSafe(java.util.Map.of(
+                "agentId", agentId,
+                "trustLevel", config.getTrustLevel().name(),
+                "model", Optional.ofNullable(config.getModel()).orElse("default")
+        ));
     }
 }

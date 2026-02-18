@@ -52,13 +52,11 @@ public class SessionSendTool implements ToolCallback {
             if (targetSession == null) {
                 return "{\"error\": \"Target session not found: " + sessionIdStr + "\"}";
             }
-            // Enforce principal ownership: deny if calling principal is unknown (null MDC)
-            // or mismatched, to prevent unauthenticated/scheduler contexts from writing to any session
+            // Enforce principal ownership: deny if calling or target principal is unknown/null,
+            // or mismatched, to prevent writes to unowned or other users' sessions
             String callingPrincipal = MDC.get("principal");
-            if (targetSession.getPrincipal() != null) {
-                if (callingPrincipal == null || !callingPrincipal.equals(targetSession.getPrincipal())) {
-                    return "{\"error\": \"Access denied: target session belongs to a different user\"}";
-                }
+            if (callingPrincipal == null || !callingPrincipal.equals(targetSession.getPrincipal())) {
+                return "{\"error\": \"Access denied: target session belongs to a different user\"}";
             }
 
             String senderAgent = MDC.get("agentId");

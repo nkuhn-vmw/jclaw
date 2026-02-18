@@ -139,10 +139,7 @@ public class AgentRuntime {
                     // EgressGuard: check accumulated response inline to halt stream on violation (§5.4)
                     // Running per-chunk ensures ContentFilterException stops delivery mid-stream
                     // rather than firing post-delivery in doOnComplete where it would be inert
-                    String accumulated = responseAccumulator.toString();
-                    if (!accumulated.isEmpty()) {
-                        contentFilterChain.filterOutbound(accumulated, context);
-                    }
+                    contentFilterChain.filterOutbound(responseAccumulator.toString(), context);
                 })
                 .doOnComplete(() -> {
                     metrics.stopLlmTimer(sample, modelName, context.agentId());

@@ -66,8 +66,8 @@ public class WebChatChannelAdapter implements ChannelAdapter {
     }
 
     public Flux<OutboundMessage> subscribeClient(String conversationId) {
-        Sinks.Many<OutboundMessage> sink = Sinks.many().multicast().onBackpressureBuffer();
-        clientSinks.put(conversationId, sink);
+        Sinks.Many<OutboundMessage> sink = clientSinks.computeIfAbsent(conversationId,
+                k -> Sinks.many().multicast().onBackpressureBuffer());
         return sink.asFlux()
                 .doOnCancel(() -> clientSinks.remove(conversationId))
                 .doOnError(e -> clientSinks.remove(conversationId))

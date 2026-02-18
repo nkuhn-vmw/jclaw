@@ -80,9 +80,9 @@ public class WebChatController {
     public Flux<ServerSentEvent<String>> streamMessages(
             @PathVariable String conversationId,
             Authentication auth) {
-        // Verify the requesting user owns this conversationId
+        // Verify the requesting user owns this conversationId — deny by default when unknown
         String owner = conversationOwners.get(conversationId);
-        if (owner != null && !owner.equals(auth.getName())) {
+        if (owner == null || !owner.equals(auth.getName())) {
             log.warn("SSE stream denied: user={} attempted to access conversation={} owned by={}",
                     auth.getName(), conversationId, owner);
             auditService.logAuth(auth.getName(), "SSE_STREAM:" + conversationId,
