@@ -12,7 +12,15 @@ public class ToolPolicy {
         if (agentConfig == null) return riskLevel == RiskLevel.LOW;
 
         // Deny list takes precedence
-        if (!agentConfig.isToolAllowed(toolName)) return false;
+        if (agentConfig.getDeniedTools() != null && agentConfig.getDeniedTools().contains(toolName)) {
+            return false;
+        }
+
+        // Explicit allow list overrides trust-level risk restrictions (per spec §5.3)
+        if (agentConfig.getAllowedTools() != null && !agentConfig.getAllowedTools().isEmpty()
+                && agentConfig.getAllowedTools().contains(toolName)) {
+            return true;
+        }
 
         // Trust level restrictions
         AgentTrustLevel trustLevel = agentConfig.getTrustLevel();

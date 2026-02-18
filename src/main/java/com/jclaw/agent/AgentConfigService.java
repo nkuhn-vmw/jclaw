@@ -42,6 +42,7 @@ public class AgentConfigService {
     /**
      * Internal read/create method — no @PreAuthorize for the same reason as getAgentConfig.
      */
+    @Transactional
     public AgentConfig getOrCreateDefault(String agentId) {
         return agentConfigRepository.findById(agentId)
                 .orElseGet(() -> {

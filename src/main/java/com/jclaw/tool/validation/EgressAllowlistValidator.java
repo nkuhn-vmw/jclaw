@@ -19,6 +19,8 @@ public class EgressAllowlistValidator {
 
         try {
             URI uri = URI.create(url);
+            // Enforce HTTPS scheme only (per spec §5.3)
+            if (!"https".equalsIgnoreCase(uri.getScheme())) return false;
             String host = uri.getHost();
             if (host == null) return false;
 

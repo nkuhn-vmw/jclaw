@@ -1,6 +1,4 @@
 spring:
-  profiles:
-    active: cloud
   datasource:
     # Auto-configured by java-cfenv from VCAP_SERVICES postgres binding
   data:

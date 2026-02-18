@@ -41,6 +41,12 @@ public class SessionSendTool implements ToolCallback {
 
         try {
             UUID sessionId = UUID.fromString(sessionIdStr);
+
+            // Verify target session exists
+            if (sessionManager.getSession(sessionId) == null) {
+                return "{\"error\": \"Target session not found: " + sessionIdStr + "\"}";
+            }
+
             String senderAgent = MDC.get("agentId");
             String labeledMessage = "[Cross-session from agent: " + (senderAgent != null ? senderAgent : "unknown") + "] " + message;
             int tokens = labeledMessage.length() / 4;

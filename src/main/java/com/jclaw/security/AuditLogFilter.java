@@ -28,20 +28,33 @@ public class AuditLogFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
 
         int status = response.getStatus();
-
-        // Only audit authentication/authorization events (401/403), not every request
-        if (status != 401 && status != 403) return;
-
-        String action = request.getMethod() + " " + request.getRequestURI();
-        String sourceIp = resolveClientIp(request);
+        String path = request.getRequestURI();
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String principal = (auth != null && auth.isAuthenticated()
                 && !"anonymousUser".equals(auth.getPrincipal()))
                 ? auth.getName()
                 : "anonymous";
+        String action = request.getMethod() + " " + path;
+        String sourceIp = resolveClientIp(request);
+
+        // Log AUTH_SUCCESS for sensitive admin/operator paths (per spec §5.5)
+        if (status >= 200 && status < 300 && isSensitivePath(path)
+                && !"anonymous".equals(principal)) {
+            auditService.logAuth(principal, action, "AUTH_SUCCESS", sourceIp);
+            return;
+        }
+
+        // Log authentication/authorization failures (401/403)
+        if (status != 401 && status != 403) return;
+
         String outcome = status == 401 ? "AUTH_FAILED" : "DENIED";
         auditService.logAuth(principal, action, outcome, sourceIp);
+    }
+
+    private boolean isSensitivePath(String path) {
+        return path.startsWith("/api/admin/") || path.startsWith("/api/agents/")
+                || path.startsWith("/api/identity-mappings/");
     }
 
     private String resolveClientIp(HttpServletRequest request) {

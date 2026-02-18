@@ -26,6 +26,7 @@ public class IdentityMappingService {
         this.auditService = auditService;
     }
 
+    @Transactional
     public Mono<String> resolvePrincipal(String channelType, String channelUserId) {
         return Mono.fromCallable(() ->
             repository.findByChannelTypeAndChannelUserId(channelType, channelUserId)

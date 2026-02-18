@@ -97,6 +97,12 @@ public class ScheduledTaskTool implements ToolCallback {
             UUID id = UUID.fromString(taskId);
             return taskRepository.findById(id)
                     .map(task -> {
+                        // Verify the calling agent owns the task
+                        String callingAgent = MDC.get("agentId");
+                        if (callingAgent != null && task.getAgentId() != null
+                                && !callingAgent.equals(task.getAgentId())) {
+                            return "{\"error\": \"Access denied: task belongs to a different agent\"}";
+                        }
                         task.setStatus(ScheduledTask.TaskStatus.CANCELLED);
                         taskRepository.save(task);
                         return String.format("{\"taskId\":\"%s\",\"status\":\"cancelled\"}", taskId);

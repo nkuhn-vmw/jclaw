@@ -166,6 +166,16 @@ public class AgentRuntime {
             return Flux.just(new AgentResponse(
                     "Your message could not be processed."));
         })
+        .onErrorResume(MaxToolCallsExceededException.class, e -> {
+            log.warn("Tool call limit exceeded for agent={} principal={}: {}",
+                    context.agentId(), context.principal(), e.getMessage());
+            auditService.logSessionEvent("TOOL_LIMIT_EXCEEDED", context.principal(),
+                    context.agentId(), null, e.getMessage());
+            metrics.recordMessageProcessed(context.channelType(), context.agentId(), "tool_limit");
+            MDC.clear();
+            return Flux.just(new AgentResponse(
+                    "I've reached the maximum number of tool operations for this request. Please try a simpler request."));
+        })
         .onErrorResume(e -> {
             log.error("Error processing message for agent={} principal={}",
                     context.agentId(), context.principal(), e);
