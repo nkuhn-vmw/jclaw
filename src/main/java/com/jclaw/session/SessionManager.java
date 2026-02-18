@@ -66,6 +66,16 @@ public class SessionManager {
                     .orElseGet(() -> createSession(context, message, scope));
         }
 
+        // DM scope: per-user-per-channel-per-agent (spec §7.2)
+        if (scope == SessionScope.DM) {
+            return sessionRepository
+                    .findByAgentIdAndPrincipalAndChannelTypeAndScopeAndStatusIn(
+                            context.agentId(), context.principal(), message.channelType(),
+                            scope, activeStatuses)
+                    .orElseGet(() -> createSession(context, message, scope));
+        }
+
+        // MAIN/API scope: per-user-per-agent (cross-channel)
         return sessionRepository
                 .findByAgentIdAndPrincipalAndScopeAndStatusIn(
                         context.agentId(), context.principal(), scope, activeStatuses)

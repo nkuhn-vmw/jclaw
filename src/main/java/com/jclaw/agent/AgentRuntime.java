@@ -161,7 +161,26 @@ public class AgentRuntime {
                     auditService.logSessionEvent("MESSAGE_PROCESSED", context.principal(),
                             context.agentId(), ctx.session().getId(), "Message processed");
                 })
-                .doFinally(signal -> MDC.clear());
+                .doFinally(signal -> {
+                    // On cancel (e.g., client disconnect), persist any partial response
+                    // to avoid orphan user messages in session history
+                    if (signal == reactor.core.publisher.SignalType.CANCEL) {
+                        String partial = responseAccumulator.toString();
+                        if (!partial.isEmpty()) {
+                            try {
+                                sessionManager.addMessage(ctx.session().getId(),
+                                        MessageRole.ASSISTANT, partial, estimateTokens(partial));
+                                log.debug("Stored partial response ({} chars) for cancelled stream",
+                                        partial.length());
+                            } catch (Exception e) {
+                                log.warn("Failed to store partial response on cancel", e);
+                            }
+                        }
+                        metrics.recordMessageProcessed(context.channelType(),
+                                context.agentId(), "cancelled");
+                    }
+                    MDC.clear();
+                });
         })
         .onErrorResume(ContentFilterChain.ContentFilterException.class, e -> {
             log.warn("Content filtered for agent={} principal={}: {}",

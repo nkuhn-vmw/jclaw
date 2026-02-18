@@ -1,5 +1,6 @@
 package com.jclaw.channel.webchat;
 
+import com.jclaw.audit.AuditService;
 import com.jclaw.channel.OutboundMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,14 +24,16 @@ public class WebChatController {
     private static final Logger log = LoggerFactory.getLogger(WebChatController.class);
 
     private final WebChatChannelAdapter webChatAdapter;
+    private final AuditService auditService;
 
     // Track conversationId -> principal ownership to prevent cross-user SSE eavesdropping
     // Bounded to prevent unbounded memory growth; in multi-instance use Redis instead
     private static final int MAX_CONVERSATION_OWNERS = 10_000;
     private final Map<String, String> conversationOwners = new ConcurrentHashMap<>();
 
-    public WebChatController(WebChatChannelAdapter webChatAdapter) {
+    public WebChatController(WebChatChannelAdapter webChatAdapter, AuditService auditService) {
         this.webChatAdapter = webChatAdapter;
+        this.auditService = auditService;
     }
 
     @PostMapping("/send")
@@ -81,6 +84,8 @@ public class WebChatController {
         if (owner != null && !owner.equals(auth.getName())) {
             log.warn("SSE stream denied: user={} attempted to access conversation={} owned by={}",
                     auth.getName(), conversationId, owner);
+            auditService.logAuth(auth.getName(), "SSE_STREAM:" + conversationId,
+                    "DENIED", null);
             return Flux.empty();
         }
 

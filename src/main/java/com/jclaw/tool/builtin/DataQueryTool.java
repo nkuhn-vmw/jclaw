@@ -32,7 +32,8 @@ public class DataQueryTool implements ToolCallback {
             Pattern.CASE_INSENSITIVE);
     private static final Set<String> INTERNAL_TABLES = Set.of(
             "audit_log", "identity_mappings", "sessions", "session_messages",
-            "agent_configs", "agent_egress_allowlist", "scheduled_tasks", "flyway_schema_history");
+            "agent_configs", "agent_allowed_tools", "agent_denied_tools",
+            "agent_egress_allowlist", "scheduled_tasks", "flyway_schema_history");
 
     private final DataSource dataSource;
 

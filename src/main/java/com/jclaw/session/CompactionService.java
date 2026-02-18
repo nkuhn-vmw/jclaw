@@ -55,6 +55,15 @@ public class CompactionService {
 
     @Transactional
     public void compactSession(Session session) {
+        // Re-fetch session inside transaction to guard against concurrent status changes
+        // (e.g., session archived between checkAndCompact() load and this call)
+        Session current = sessionRepository.findById(session.getId()).orElse(null);
+        if (current == null || current.getStatus() != SessionStatus.ACTIVE) {
+            log.debug("Skipping compaction for session {} (status={})",
+                    session.getId(), current != null ? current.getStatus() : "deleted");
+            return;
+        }
+
         List<SessionMessage> messages = messageRepository
                 .findBySessionIdAndCompactedFalseOrderByCreatedAtAsc(session.getId());
 

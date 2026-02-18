@@ -46,10 +46,13 @@ public class SessionHistoryTool implements ToolCallback {
             if (callingAgent != null && !callingAgent.equals(session.getAgentId())) {
                 return "{\"error\": \"Access denied: session belongs to a different agent\"}";
             }
+            // Enforce principal ownership: deny if calling principal is unknown (null MDC)
+            // or mismatched, to prevent unauthenticated contexts from reading any session
             String callingPrincipal = MDC.get("principal");
-            if (callingPrincipal != null && session.getPrincipal() != null
-                    && !callingPrincipal.equals(session.getPrincipal())) {
-                return "{\"error\": \"Access denied: session belongs to a different user\"}";
+            if (session.getPrincipal() != null) {
+                if (callingPrincipal == null || !callingPrincipal.equals(session.getPrincipal())) {
+                    return "{\"error\": \"Access denied: session belongs to a different user\"}";
+                }
             }
 
             List<SessionMessage> history = sessionManager.getHistory(sessionId);
