@@ -126,9 +126,10 @@ public class ToolRegistry {
                 metrics.recordToolInvocation(toolName, context.agentId(), "success");
                 return result;
             } catch (Exception e) {
+                String errorMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "unknown error";
                 auditService.logToolCall(context.principal(), context.agentId(),
                         sessionId, toolName, "FAILURE",
-                        "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}");
+                        "{\"error\":\"" + errorMsg + "\"}");
                 metrics.recordToolInvocation(toolName, context.agentId(), "failure");
                 throw e;
             }

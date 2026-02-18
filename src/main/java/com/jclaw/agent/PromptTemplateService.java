@@ -57,10 +57,11 @@ public class PromptTemplateService {
         // Exclude the just-stored current user message from history to avoid double-injection
         // (AgentRuntime stores the user message to DB before calling buildPrompt, so history
         // already contains the current message — we add it explicitly below)
+        // Match by role only: we just stored a USER message, so the last entry must be it.
+        // Content comparison is fragile when sanitizers modify the stored text.
         if (!history.isEmpty()) {
             SessionMessage last = history.get(history.size() - 1);
-            if (last.getRole() == com.jclaw.session.MessageRole.USER
-                    && message.content().equals(last.getContent())) {
+            if (last.getRole() == com.jclaw.session.MessageRole.USER) {
                 history = new ArrayList<>(history.subList(0, history.size() - 1));
             }
         }

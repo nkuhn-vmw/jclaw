@@ -134,6 +134,7 @@ public class AgentRuntime {
                         chatResponse, modelName, context.agentId(),
                         toolCallCount, maxToolCalls, responseAccumulator))
                 .filter(response -> response.content() != null && !response.content().isEmpty())
+                .publishOn(Schedulers.boundedElastic()) // filterOutbound does JPA lookup; move off Netty I/O thread
                 .doOnNext(response -> {
                     // EgressGuard: check accumulated response inline to halt stream on violation (§5.4)
                     // Running per-chunk ensures ContentFilterException stops delivery mid-stream

@@ -50,15 +50,15 @@ public class ChannelSendTool implements ToolCallback {
             return "{\"error\": \"Message exceeds maximum length of " + MAX_MESSAGE_LENGTH + " characters\"}";
         }
 
-        // EgressGuard: filter outbound content before sending to external channel (per spec §5.4)
+        // EgressGuard: always filter outbound content before sending to external channel (per spec §5.4)
         String agentId = MDC.get("agentId");
         String principal = MDC.get("principal");
         String channelType = MDC.get("channelType");
-        if (agentId != null) {
-            AgentContext ctx = new AgentContext(agentId, principal != null ? principal : "system",
-                    channelType != null ? channelType : "tool");
-            contentFilterChain.filterOutbound(message, ctx);
-        }
+        AgentContext ctx = new AgentContext(
+                agentId != null ? agentId : "unknown",
+                principal != null ? principal : "system",
+                channelType != null ? channelType : "tool");
+        contentFilterChain.filterOutbound(message, ctx);
 
         ChannelAdapter adapter = channelRouter.getAdapter(channel);
         if (adapter == null) {

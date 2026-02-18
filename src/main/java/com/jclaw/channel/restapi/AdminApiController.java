@@ -53,6 +53,8 @@ public class AdminApiController {
     @PreAuthorize("hasAuthority('SCOPE_jclaw.admin')")
     public AgentConfig updateAgent(@PathVariable String agentId,
                                   @RequestBody AgentConfig config) {
+        // Enforce path/body consistency: override body agentId with path parameter
+        config.setAgentId(agentId);
         return agentConfigService.updateAgentConfig(agentId, config);
     }
 
