@@ -72,6 +72,6 @@ public class ScheduledTask {
     public Instant getCreatedAt() { return createdAt; }
 
     public enum TaskStatus {
-        ACTIVE, CANCELLED
+        ACTIVE, COMPLETED, CANCELLED
     }
 }

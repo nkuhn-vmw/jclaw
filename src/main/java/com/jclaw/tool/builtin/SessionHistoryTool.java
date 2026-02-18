@@ -59,7 +59,7 @@ public class SessionHistoryTool implements ToolCallback {
                     .collect(Collectors.joining(",", "[", "]"));
             return result;
         } catch (Exception e) {
-            return "{\"error\": \"" + e.getMessage() + "\"}";
+            return "{\"error\": \"" + (e.getMessage() != null ? e.getMessage().replace("\"", "'") : "Unknown error") + "\"}";
         }
     }
 

@@ -136,6 +136,6 @@ public class GoogleChatChannelAdapter implements ChannelAdapter {
         return Mono.fromCallable(() -> {
             credentials.refreshIfExpired();
             return credentials.getAccessToken().getTokenValue();
-        });
+        }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
     }
 }

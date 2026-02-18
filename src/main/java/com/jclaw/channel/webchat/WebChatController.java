@@ -25,6 +25,8 @@ public class WebChatController {
     private final WebChatChannelAdapter webChatAdapter;
 
     // Track conversationId -> principal ownership to prevent cross-user SSE eavesdropping
+    // Bounded to prevent unbounded memory growth; in multi-instance use Redis instead
+    private static final int MAX_CONVERSATION_OWNERS = 10_000;
     private final Map<String, String> conversationOwners = new ConcurrentHashMap<>();
 
     public WebChatController(WebChatChannelAdapter webChatAdapter) {
@@ -44,6 +46,19 @@ public class WebChatController {
         }
 
         String userId = auth.getName();
+
+        // Evict stale entries if map exceeds bound to prevent memory leak
+        if (conversationOwners.size() >= MAX_CONVERSATION_OWNERS) {
+            log.warn("Conversation owners cache full ({} entries), evicting oldest entries",
+                    conversationOwners.size());
+            // Remove ~10% of entries to avoid thrashing
+            var iterator = conversationOwners.entrySet().iterator();
+            int toRemove = MAX_CONVERSATION_OWNERS / 10;
+            while (iterator.hasNext() && toRemove-- > 0) {
+                iterator.next();
+                iterator.remove();
+            }
+        }
 
         // Register ownership: first user to use a conversationId owns it
         conversationOwners.putIfAbsent(conversationId, userId);

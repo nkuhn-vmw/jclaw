@@ -60,8 +60,17 @@ public class GoogleChatWebhookController {
             }
         }
 
+        // Detect DM vs group space from Google Chat space type
+        String spaceType = space != null ? (String) space.get("type") : null;
+        java.util.Map<String, Object> metadata = new java.util.HashMap<>(event);
+        if ("DM".equals(spaceType)) {
+            metadata.put("isDm", true);
+        } else if ("ROOM".equals(spaceType) || "SPACE".equals(spaceType)) {
+            metadata.put("isGroup", true);
+        }
+
         log.debug("Google Chat event: type={} user={} space={} thread={}", type, userId, spaceId, threadName);
-        googleChatAdapter.processEvent(userId, spaceId, text, threadName, event);
+        googleChatAdapter.processEvent(userId, spaceId, text, threadName, metadata);
 
         // Return empty body to avoid double-message (async adapter sends the real reply)
         return ResponseEntity.ok().build();

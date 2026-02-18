@@ -39,7 +39,7 @@ public class TeamsChannelAdapter implements ChannelAdapter {
     private final AtomicReference<CachedToken> cachedToken = new AtomicReference<>();
 
     public TeamsChannelAdapter(SecretsConfig secretsConfig,
-                              @Value("${jclaw.teams.app-id:}") String appId) {
+                              @Value("${vcap.services.jclaw-secrets.credentials.teams-app-id:}") String appId) {
         this.secretsConfig = secretsConfig;
         this.appId = appId;
         this.webClient = WebClient.builder()

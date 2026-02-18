@@ -134,25 +134,28 @@ public class AgentRuntime {
                         chatResponse, modelName, context.agentId(),
                         toolCallCount, maxToolCalls, responseAccumulator))
                 .filter(response -> response.content() != null && !response.content().isEmpty())
+                .doOnNext(response -> {
+                    // EgressGuard: check accumulated response inline to halt stream on violation (§5.4)
+                    // Running per-chunk ensures ContentFilterException stops delivery mid-stream
+                    // rather than firing post-delivery in doOnComplete where it would be inert
+                    String accumulated = responseAccumulator.toString();
+                    if (!accumulated.isEmpty()) {
+                        contentFilterChain.filterOutbound(accumulated, context);
+                    }
+                })
                 .doOnComplete(() -> {
                     metrics.stopLlmTimer(sample, modelName, context.agentId());
 
-                    // Store assistant response and apply egress guard
+                    // Store assistant response (egress already validated inline via doOnNext)
                     String fullResponse = responseAccumulator.toString();
-
-                    // 9. Egress guard: filter outbound content before delivery
-                    // Run on all responses (including tool-only) to catch data exfiltration
                     if (!fullResponse.isEmpty()) {
-                        contentFilterChain.filterOutbound(fullResponse, context);
                         sessionManager.addMessage(ctx.session().getId(), MessageRole.ASSISTANT,
                                 fullResponse, estimateTokens(fullResponse));
                     } else if (toolCallCount.get() > 0) {
-                        // Tool-only response: scan tool results that were returned
                         log.debug("Tool-only response with {} tool calls, egress guard applied via tool audit",
                                 toolCallCount.get());
                     }
 
-                    // Record message processed metric with outcome (OBS-001)
                     metrics.recordMessageProcessed(context.channelType(), context.agentId(), "success");
 
                     auditService.logSessionEvent("MESSAGE_PROCESSED", context.principal(),

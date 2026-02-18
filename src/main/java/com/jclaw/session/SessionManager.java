@@ -87,7 +87,8 @@ public class SessionManager {
 
     private SessionScope resolveScope(InboundMessage message) {
         if ("rest-api".equals(message.channelType())) return SessionScope.API;
-        if (message.conversationId() != null && message.conversationId().startsWith("G")) {
+        // Channel-agnostic group detection via metadata flag set by each adapter
+        if (message.metadata() != null && Boolean.TRUE.equals(message.metadata().get("isGroup"))) {
             return SessionScope.GROUP;
         }
         // DM scope for direct messages (per-user-per-channel isolation)

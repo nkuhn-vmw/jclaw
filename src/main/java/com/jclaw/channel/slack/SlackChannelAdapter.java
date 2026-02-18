@@ -68,9 +68,11 @@ public class SlackChannelAdapter implements ChannelAdapter {
 
                 Map<String, Object> metadata = new HashMap<>();
                 metadata.put("team", event.getTeam() != null ? event.getTeam() : "");
-                // Detect DMs (Slack channel type "im")
+                // Detect DMs (Slack channel type "im") vs group channels
                 if ("im".equals(event.getChannelType())) {
                     metadata.put("isDm", true);
+                } else {
+                    metadata.put("isGroup", true);
                 }
 
                 InboundMessage msg = new InboundMessage(
@@ -134,7 +136,7 @@ public class SlackChannelAdapter implements ChannelAdapter {
 
     @Override
     public Mono<Void> sendMessage(OutboundMessage msg) {
-        return Mono.fromRunnable(() -> {
+        return Mono.<Void>fromRunnable(() -> {
             try {
                 if (slackApp == null) return;
                 slackApp.client().chatPostMessage(r -> r
@@ -145,7 +147,7 @@ public class SlackChannelAdapter implements ChannelAdapter {
             } catch (IOException | SlackApiException e) {
                 log.error("Failed to send Slack message", e);
             }
-        });
+        }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
     }
 
     @Override

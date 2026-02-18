@@ -80,6 +80,8 @@ public class DiscordChannelAdapter extends ListenerAdapter implements ChannelAda
         metadata.put("guild", event.isFromGuild() ? event.getGuild().getId() : "dm");
         if (!event.isFromGuild()) {
             metadata.put("isDm", true);
+        } else {
+            metadata.put("isGroup", true);
         }
 
         InboundMessage msg = new InboundMessage(

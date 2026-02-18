@@ -145,12 +145,6 @@ public class ScheduledTaskTool implements ToolCallback {
                     task.getId(), task.getName(), task.getMessage());
             task.setLastFiredAt(Instant.now());
 
-            // Audit the scheduled task dispatch
-            auditService.logToolCall(
-                    task.getPrincipal(), task.getAgentId(), null,
-                    "scheduled_task", "SUCCESS",
-                    "{\"taskId\":\"" + task.getId() + "\",\"name\":\"" + task.getName() + "\"}");
-
             // Dispatch the task message to the agent for processing
             try {
                 String agentId = task.getAgentId() != null ? task.getAgentId() : "default";
@@ -162,20 +156,42 @@ public class ScheduledTaskTool implements ToolCallback {
                 agentRuntime.processMessage(context, inbound)
                         .collectList()
                         .subscribe(
-                                responses -> log.info("Scheduled task {} dispatched, got {} responses",
-                                        task.getId(), responses.size()),
-                                error -> log.error("Scheduled task {} dispatch failed: {}",
-                                        task.getId(), error.getMessage()));
+                                responses -> {
+                                    log.info("Scheduled task {} dispatched, got {} responses",
+                                            task.getId(), responses.size());
+                                    auditService.logToolCall(
+                                            task.getPrincipal(), task.getAgentId(), null,
+                                            "scheduled_task", "SUCCESS",
+                                            "{\"taskId\":\"" + task.getId() + "\",\"name\":\"" + task.getName() + "\"}");
+                                },
+                                error -> {
+                                    log.error("Scheduled task {} dispatch failed: {}",
+                                            task.getId(), error.getMessage());
+                                    auditService.logToolCall(
+                                            task.getPrincipal(), task.getAgentId(), null,
+                                            "scheduled_task", "FAILURE",
+                                            "{\"taskId\":\"" + task.getId() + "\"}");
+                                });
             } catch (Exception e) {
                 log.error("Failed to dispatch scheduled task {}: {}", task.getId(), e.getMessage());
+                auditService.logToolCall(
+                        task.getPrincipal(), task.getAgentId(), null,
+                        "scheduled_task", "FAILURE",
+                        "{\"taskId\":\"" + task.getId() + "\"}");
             }
 
-            // Calculate next fire time
+            // Calculate next fire time (null means no future occurrences)
             try {
                 CronExpression cronExpr = CronExpression.parse(task.getCronExpression());
-                Instant nextFire = cronExpr.next(Instant.now().atZone(ZoneOffset.UTC).toLocalDateTime())
-                        .atZone(ZoneOffset.UTC).toInstant();
-                task.setNextFireAt(nextFire);
+                java.time.LocalDateTime next = cronExpr.next(
+                        Instant.now().atZone(ZoneOffset.UTC).toLocalDateTime());
+                if (next == null) {
+                    log.info("Scheduled task {} has no future occurrences, marking completed",
+                            task.getId());
+                    task.setStatus(ScheduledTask.TaskStatus.COMPLETED);
+                } else {
+                    task.setNextFireAt(next.atZone(ZoneOffset.UTC).toInstant());
+                }
             } catch (IllegalArgumentException e) {
                 log.error("Invalid cron expression for task {}: {}", task.getId(), task.getCronExpression());
                 task.setStatus(ScheduledTask.TaskStatus.CANCELLED);

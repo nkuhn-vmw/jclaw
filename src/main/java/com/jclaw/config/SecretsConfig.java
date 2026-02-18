@@ -30,10 +30,10 @@ public class SecretsConfig {
     @Value("${vcap.services.jclaw-secrets.credentials.search-api-key:#{null}}")
     private String searchApiKey;
 
-    @Value("${jclaw.teams.app-id:#{null}}")
+    @Value("${vcap.services.jclaw-secrets.credentials.teams-app-id:#{null}}")
     private String teamsAppId;
 
-    @Value("${jclaw.google-chat.project-number:#{null}}")
+    @Value("${vcap.services.jclaw-secrets.credentials.google-chat-project-number:#{null}}")
     private String googleChatProjectNumber;
 
     public String getSlackBotToken() { return slackBotToken; }

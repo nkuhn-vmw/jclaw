@@ -44,8 +44,17 @@ public class TeamsWebhookController {
             return ResponseEntity.badRequest().build();
         }
 
+        // Detect DM vs group conversation from Teams conversation type
+        String conversationType = conversation != null ? (String) conversation.get("conversationType") : null;
+        java.util.Map<String, Object> metadata = new java.util.HashMap<>(activity);
+        if ("personal".equals(conversationType)) {
+            metadata.put("isDm", true);
+        } else if ("channel".equals(conversationType) || "groupChat".equals(conversationType)) {
+            metadata.put("isGroup", true);
+        }
+
         log.debug("Teams activity: type={} user={} conversation={}", type, userId, conversationId);
-        teamsAdapter.processActivity(userId, conversationId, text, activity);
+        teamsAdapter.processActivity(userId, conversationId, text, metadata);
 
         return ResponseEntity.ok().build();
     }
