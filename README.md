@@ -41,7 +41,7 @@ Slack    Teams    Discord    Google Chat    WebChat    REST API
 ┌─────────────────────────────────────────────────────────────────┐
 │                           AgentRuntime                          │
 │                                                                 │
-│  ContentFilterChain    ModelRouter          ToolRegistry         │
+│  ContentFilterChain    ModelRouter          ToolRegistry        │
 │  ├ PatternDetector     ├ Anthropic          ├ data_query        │
 │  ├ InjectionDetector   ├ OpenAI             ├ http_fetch        │
 │  ├ InputSanitizer      └ Tanzu GenAI        ├ web_search        │
