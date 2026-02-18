@@ -6,6 +6,7 @@ import com.jclaw.tool.JclawTool;
 import com.jclaw.tool.RiskLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Component;
@@ -40,9 +41,11 @@ public class SessionSendTool implements ToolCallback {
 
         try {
             UUID sessionId = UUID.fromString(sessionIdStr);
-            int tokens = message.length() / 4;
-            sessionManager.addMessage(sessionId, MessageRole.SYSTEM, message, tokens);
-            log.info("Cross-session message sent to session={}", sessionId);
+            String senderAgent = MDC.get("agentId");
+            String labeledMessage = "[Cross-session from agent: " + (senderAgent != null ? senderAgent : "unknown") + "] " + message;
+            int tokens = labeledMessage.length() / 4;
+            sessionManager.addMessage(sessionId, MessageRole.USER, labeledMessage, tokens);
+            log.info("Cross-session message sent to session={} from agent={}", sessionId, senderAgent);
             return String.format("{\"status\":\"delivered\",\"sessionId\":\"%s\"}", sessionId);
         } catch (IllegalArgumentException e) {
             return "{\"error\": \"Invalid sessionId format\"}";

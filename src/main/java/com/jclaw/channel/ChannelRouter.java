@@ -134,11 +134,17 @@ public class ChannelRouter {
                         message.channelUserId());
 
                 // Queue unmapped identity for admin to assign a real SSO principal
-                identityMappingService.createMapping(
-                        message.channelType(),
-                        message.channelUserId(),
-                        null,
-                        null);
+                // Use try-catch to handle duplicate creation (unique constraint)
+                try {
+                    identityMappingService.createMapping(
+                            message.channelType(),
+                            message.channelUserId(),
+                            null,
+                            null);
+                } catch (org.springframework.dao.DataIntegrityViolationException ignored) {
+                    log.debug("Identity mapping already queued for channel={} user={}",
+                            message.channelType(), message.channelUserId());
+                }
 
                 auditService.logSessionEvent("UNMAPPED_IDENTITY_QUEUED", message.channelUserId(),
                         null, null, "Unmapped identity queued for approval: "

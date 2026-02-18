@@ -40,6 +40,6 @@ public class InputSanitizer implements ContentFilter {
             return FilterResult.reject("Suspicious unicode content detected");
         }
 
-        return FilterResult.pass();
+        return FilterResult.pass(normalized);
     }
 }

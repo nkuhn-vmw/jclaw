@@ -10,6 +10,8 @@ import org.springframework.ai.tool.metadata.DefaultToolMetadata;
 import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.stereotype.Component;
 
+import org.slf4j.MDC;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -30,9 +32,9 @@ public class SessionListTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        // toolInput expected: {"principal": "user@example.com"}
-        String principal = com.jclaw.tool.ToolInputParser.getString(toolInput, "principal");
-        if (principal == null) return "{\"error\": \"principal required\"}";
+        // Use authenticated principal from MDC — never trust LLM-provided principal
+        String principal = MDC.get("principal");
+        if (principal == null) return "{\"error\": \"No authenticated principal in context\"}";
 
         List<Session> sessions = sessionManager.getActiveSessions(principal);
         String result = sessions.stream()
@@ -47,7 +49,7 @@ public class SessionListTool implements ToolCallback {
         return ToolDefinition.builder()
                 .name("session_list")
                 .description("List active sessions")
-                .inputSchema("{\"type\":\"object\",\"properties\":{\"principal\":{\"type\":\"string\",\"description\":\"User principal/email\"}},\"required\":[\"principal\"]}")
+                .inputSchema("{\"type\":\"object\",\"properties\":{},\"required\":[]}")
                 .build();
     }
 

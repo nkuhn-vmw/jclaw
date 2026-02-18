@@ -28,21 +28,28 @@ public class AuditLogFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
 
         int status = response.getStatus();
+
+        // Only audit authentication/authorization events (401/403), not every request
+        if (status != 401 && status != 403) return;
+
         String action = request.getMethod() + " " + request.getRequestURI();
-        String sourceIp = request.getRemoteAddr();
+        String sourceIp = resolveClientIp(request);
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.isAuthenticated()
-                && !"anonymousUser".equals(auth.getPrincipal())) {
-            String principal = auth.getName();
-            String outcome = status < 400 ? "SUCCESS" : (status == 403 ? "DENIED" : "FAILURE");
-            auditService.logAuth(principal, action, outcome, sourceIp);
-        } else if (status == 401 || status == 403) {
-            // Audit failed authentication attempts (SEC-002)
-            String principal = auth != null ? auth.getName() : "anonymous";
-            String outcome = status == 401 ? "AUTH_FAILED" : "DENIED";
-            auditService.logAuth(principal, action, outcome, sourceIp);
+        String principal = (auth != null && auth.isAuthenticated()
+                && !"anonymousUser".equals(auth.getPrincipal()))
+                ? auth.getName()
+                : "anonymous";
+        String outcome = status == 401 ? "AUTH_FAILED" : "DENIED";
+        auditService.logAuth(principal, action, outcome, sourceIp);
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
         }
+        return request.getRemoteAddr();
     }
 
     @Override

@@ -14,7 +14,7 @@ public class EgressAllowlistValidator {
             return false; // deny if no agent config at all
         }
         if (agentConfig.getEgressAllowlist() == null || agentConfig.getEgressAllowlist().isEmpty()) {
-            return true; // no allowlist configured = unrestricted egress (spec §8: agents without explicit allowlist can use http_fetch)
+            return false; // deny by default — explicit allowlist required per spec §5.3
         }
 
         try {

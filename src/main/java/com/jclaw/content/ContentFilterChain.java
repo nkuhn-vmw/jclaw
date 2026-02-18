@@ -30,18 +30,22 @@ public class ContentFilterChain {
         this.agentConfigService = agentConfigService;
     }
 
-    public void filterInbound(InboundMessage message, AgentContext context) {
+    public InboundMessage filterInbound(InboundMessage message, AgentContext context) {
         // Resolve per-agent content filter policy
         ContentFilterPolicy policy = resolvePolicy(context.agentId());
 
+        InboundMessage current = message;
         for (ContentFilter filter : filters) {
+            // EgressGuard only applies to outbound content, skip on inbound
+            if ("EgressGuard".equals(filter.name())) continue;
+
             // Skip filters disabled by per-agent policy
             if (!isFilterEnabled(filter, policy)) {
                 log.debug("Filter {} disabled by policy for agent={}", filter.name(), context.agentId());
                 continue;
             }
 
-            ContentFilter.FilterResult result = filter.filter(message, context, policy);
+            ContentFilter.FilterResult result = filter.filter(current, context, policy);
             if (!result.passed()) {
                 metrics.recordContentFilterTriggered(filter.name(), "REJECTED");
                 auditService.logContentFilter(filter.name(), "REJECTED",
@@ -50,7 +54,15 @@ public class ContentFilterChain {
                         filter.name(), context.principal(), result.reason());
                 throw new ContentFilterException(filter.name(), result.reason());
             }
+
+            // Propagate sanitized content from filters like InputSanitizer
+            if (result.sanitizedContent() != null && !result.sanitizedContent().equals(current.content())) {
+                current = new InboundMessage(current.channelType(), current.channelUserId(),
+                        current.conversationId(), current.threadId(), result.sanitizedContent(),
+                        current.metadata(), current.receivedAt());
+            }
         }
+        return current;
     }
 
     private ContentFilterPolicy resolvePolicy(String agentId) {
@@ -71,11 +83,12 @@ public class ContentFilterChain {
 
         // Create a synthetic inbound message to reuse the EgressGuard filter
         InboundMessage synthetic = new InboundMessage(
-                context.channelType(), "system", null, null, content, null, null);
+                context.channelType(), "system", null, null, content,
+                java.util.Map.of(), java.time.Instant.now());
 
         for (ContentFilter filter : filters) {
             if ("EgressGuard".equals(filter.name())) {
-                ContentFilter.FilterResult result = filter.filter(synthetic, context);
+                ContentFilter.FilterResult result = filter.filter(synthetic, context, policy);
                 if (!result.passed()) {
                     metrics.recordContentFilterTriggered("EgressGuard", "BLOCKED_OUTBOUND");
                     auditService.logContentFilter("EgressGuard", "BLOCKED_OUTBOUND",

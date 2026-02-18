@@ -18,8 +18,8 @@ public class GenAiConfig {
     @Bean
     @Profile("cloud")
     public ChatModel cloudChatModel(
-            @Value("${vcap.services.jclaw-genai.credentials.api-base:}") String apiBase,
-            @Value("${vcap.services.jclaw-genai.credentials.api-key:}") String apiKey,
+            @Value("${vcap.services.jclaw-genai.credentials.api-base}") String apiBase,
+            @Value("${vcap.services.jclaw-genai.credentials.api-key}") String apiKey,
             @Value("${vcap.services.jclaw-genai.credentials.model:claude-sonnet-4-20250514}") String model) {
         return createAnthropicModel(apiBase, apiKey, model);
     }

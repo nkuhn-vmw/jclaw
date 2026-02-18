@@ -2,6 +2,7 @@ package com.jclaw.tool.builtin;
 
 import com.jclaw.agent.AgentContext;
 import com.jclaw.agent.AgentRuntime;
+import com.jclaw.audit.AuditService;
 import com.jclaw.channel.InboundMessage;
 import com.jclaw.tool.JclawTool;
 import com.jclaw.tool.RiskLevel;
@@ -35,11 +36,14 @@ public class ScheduledTaskTool implements ToolCallback {
 
     private final ScheduledTaskRepository taskRepository;
     private final AgentRuntime agentRuntime;
+    private final AuditService auditService;
 
     public ScheduledTaskTool(ScheduledTaskRepository taskRepository,
-                             @Lazy AgentRuntime agentRuntime) {
+                             @Lazy AgentRuntime agentRuntime,
+                             AuditService auditService) {
         this.taskRepository = taskRepository;
         this.agentRuntime = agentRuntime;
+        this.auditService = auditService;
     }
 
     @Override
@@ -104,7 +108,9 @@ public class ScheduledTaskTool implements ToolCallback {
     }
 
     private String listTasks() {
-        List<ScheduledTask> tasks = taskRepository.findByStatus(ScheduledTask.TaskStatus.ACTIVE);
+        String agentId = MDC.get("agentId");
+        List<ScheduledTask> tasks = taskRepository.findByStatus(ScheduledTask.TaskStatus.ACTIVE)
+                .stream().filter(t -> agentId == null || agentId.equals(t.getAgentId())).toList();
         StringBuilder sb = new StringBuilder("[");
         boolean first = true;
         for (ScheduledTask task : tasks) {
@@ -132,6 +138,12 @@ public class ScheduledTaskTool implements ToolCallback {
             log.info("Scheduled task fired: id={} name={} message={}",
                     task.getId(), task.getName(), task.getMessage());
             task.setLastFiredAt(Instant.now());
+
+            // Audit the scheduled task dispatch
+            auditService.logToolCall(
+                    task.getPrincipal(), task.getAgentId(), null,
+                    "scheduled_task", "SUCCESS",
+                    "{\"taskId\":\"" + task.getId() + "\",\"name\":\"" + task.getName() + "\"}");
 
             // Dispatch the task message to the agent for processing
             try {

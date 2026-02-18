@@ -13,6 +13,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Component
@@ -29,6 +30,9 @@ public class DataQueryTool implements ToolCallback {
     private static final Pattern DANGEROUS_KEYWORD = Pattern.compile(
             "\\b(DROP|DELETE|INSERT|UPDATE|ALTER|TRUNCATE|CREATE|GRANT|REVOKE|EXEC|EXECUTE|CALL)\\b",
             Pattern.CASE_INSENSITIVE);
+    private static final Set<String> INTERNAL_TABLES = Set.of(
+            "audit_log", "identity_mappings", "sessions", "session_messages",
+            "agent_configs", "agent_egress_allowlist", "scheduled_tasks", "flyway_schema_history");
 
     private final DataSource dataSource;
 
@@ -65,6 +69,15 @@ public class DataQueryTool implements ToolCallback {
         if (DANGEROUS_KEYWORD.matcher(withoutStrings).find()) {
             log.warn("Rejected query with dangerous keyword: {}", query);
             return "{\"error\": \"Query contains disallowed SQL keywords\"}";
+        }
+
+        // Block queries against jclaw internal tables
+        String lowerQuery = withoutStrings.toLowerCase();
+        for (String table : INTERNAL_TABLES) {
+            if (lowerQuery.contains(table)) {
+                log.warn("Rejected query referencing internal table {}: {}", table, query);
+                return "{\"error\": \"Query references internal table: " + table + "\"}";
+            }
         }
 
         try (Connection conn = dataSource.getConnection()) {

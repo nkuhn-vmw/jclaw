@@ -78,14 +78,15 @@ public class AgentRuntime {
             MDC.put("sessionId", session.getId().toString());
 
             // 2. Content filtering (throws ContentFilterException if rejected)
-            contentFilterChain.filterInbound(message, context);
+            // Returns sanitized message with cleaned content
+            InboundMessage filtered = contentFilterChain.filterInbound(message, context);
 
-            // 3. Store user message
+            // 3. Store user message (use sanitized content)
             sessionManager.addMessage(session.getId(), MessageRole.USER,
-                    message.content(), estimateTokens(message.content()));
+                    filtered.content(), estimateTokens(filtered.content()));
 
-            // 4. Build prompt
-            Prompt prompt = promptService.buildPrompt(context, session, message);
+            // 4. Build prompt (use sanitized message)
+            Prompt prompt = promptService.buildPrompt(context, session, filtered);
 
             // 5. Resolve agent config, model, and tools
             AgentConfig config = agentConfigService.getOrCreateDefault(context.agentId());
@@ -163,7 +164,7 @@ public class AgentRuntime {
             metrics.recordMessageProcessed(context.channelType(), context.agentId(), "filtered");
             MDC.clear();
             return Flux.just(new AgentResponse(
-                    "Your message was filtered: " + e.getMessage()));
+                    "Your message could not be processed."));
         })
         .onErrorResume(e -> {
             log.error("Error processing message for agent={} principal={}",

@@ -1,10 +1,12 @@
 package com.jclaw.tool.builtin;
 
+import com.jclaw.session.Session;
 import com.jclaw.session.SessionManager;
 import com.jclaw.session.SessionMessage;
 import com.jclaw.tool.JclawTool;
 import com.jclaw.tool.RiskLevel;
 import org.springframework.ai.tool.ToolCallback;
+import org.slf4j.MDC;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.DefaultToolMetadata;
 import org.springframework.ai.tool.metadata.ToolMetadata;
@@ -36,6 +38,15 @@ public class SessionHistoryTool implements ToolCallback {
             if (sessionIdStr == null) return "{\"error\": \"sessionId required\"}";
 
             UUID sessionId = UUID.fromString(sessionIdStr);
+
+            // Verify the calling agent owns this session
+            Session session = sessionManager.getSession(sessionId);
+            if (session == null) return "{\"error\": \"Session not found\"}";
+            String callingAgent = MDC.get("agentId");
+            if (callingAgent != null && !callingAgent.equals(session.getAgentId())) {
+                return "{\"error\": \"Access denied: session belongs to a different agent\"}";
+            }
+
             List<SessionMessage> history = sessionManager.getHistory(sessionId);
             String result = history.stream()
                     .map(m -> String.format("{\"role\":\"%s\",\"content\":\"%s\"}",

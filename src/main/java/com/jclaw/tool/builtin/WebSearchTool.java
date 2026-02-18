@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
+
 @Component
 @JclawTool(
         name = "web_search",
@@ -82,6 +84,7 @@ public class WebSearchTool implements ToolCallback {
                         .build())
                 .retrieve()
                 .bodyToMono(String.class)
+                .timeout(Duration.ofSeconds(15))
                 .block();
     }
 
@@ -95,6 +98,7 @@ public class WebSearchTool implements ToolCallback {
                 .header("Accept", "application/json")
                 .retrieve()
                 .bodyToMono(String.class)
+                .timeout(Duration.ofSeconds(15))
                 .block();
     }
 

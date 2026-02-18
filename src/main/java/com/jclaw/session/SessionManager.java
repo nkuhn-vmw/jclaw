@@ -150,6 +150,10 @@ public class SessionManager {
         return messageRepository.sumTokensBySessionId(sessionId);
     }
 
+    public Session getSession(UUID sessionId) {
+        return sessionRepository.findById(sessionId).orElse(null);
+    }
+
     public List<Session> getActiveSessions(String principal) {
         return sessionRepository.findByPrincipalAndStatus(principal, SessionStatus.ACTIVE);
     }

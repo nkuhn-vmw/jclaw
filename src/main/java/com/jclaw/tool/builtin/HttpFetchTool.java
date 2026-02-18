@@ -13,6 +13,8 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
+
 @Component
 @JclawTool(
         name = "http_fetch",
@@ -57,6 +59,7 @@ public class HttpFetchTool implements ToolCallback {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(10))
                     .block();
 
             if (body != null && body.length() > 10000) {
