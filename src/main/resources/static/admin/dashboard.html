@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>jclaw Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/admin/css/dashboard.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <span class="logo">jclaw</span>
+            <span class="version-badge">v1.0</span>
+        </div>
+        <div class="header-right">
+            <span id="username" class="username"></span>
+            <a href="/logout" class="btn btn-sm btn-outline">Logout</a>
+        </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="admin">Admin</button>
+        <button class="tab-btn" data-tab="chat">Chat</button>
+        <button class="tab-btn" data-tab="skills">Skills</button>
+    </nav>
+
+    <!-- Tab Content -->
+    <main class="content">
+        <!-- Admin Tab -->
+        <div id="tab-admin" class="tab-panel active">
+            <!-- Agent Configurations -->
+            <section class="section">
+                <div class="section-header">
+                    <h2>Agent Configurations</h2>
+                    <button class="btn btn-accent" onclick="adminTab.createAgent()">+ New Agent</button>
+                </div>
+                <div id="agents-grid" class="card-grid">
+                    <div class="loading">Loading agents...</div>
+                </div>
+            </section>
+
+            <!-- Pending Identity Mappings -->
+            <section class="section">
+                <div class="section-header">
+                    <h2>Pending Identity Mappings</h2>
+                </div>
+                <div id="mappings-list" class="card-grid">
+                    <div class="loading">Loading mappings...</div>
+                </div>
+            </section>
+
+            <!-- Active Sessions -->
+            <section class="section">
+                <div class="section-header">
+                    <h2>Active Sessions</h2>
+                    <select id="session-agent-filter" class="select" onchange="adminTab.loadSessions()">
+                        <option value="">All Agents</option>
+                    </select>
+                </div>
+                <div id="sessions-list" class="card-grid">
+                    <div class="loading">Loading sessions...</div>
+                </div>
+            </section>
+
+            <!-- Audit Log -->
+            <section class="section">
+                <div class="section-header">
+                    <h2>Audit Log</h2>
+                    <div class="filter-row">
+                        <input type="text" id="audit-principal" class="input" placeholder="Filter by principal">
+                        <select id="audit-event-type" class="select">
+                            <option value="">All Events</option>
+                            <option value="AUTH_SUCCESS">AUTH_SUCCESS</option>
+                            <option value="AUTH_FAILURE">AUTH_FAILURE</option>
+                            <option value="TOOL_CALL">TOOL_CALL</option>
+                            <option value="SESSION_CREATE">SESSION_CREATE</option>
+                            <option value="SESSION_ARCHIVE">SESSION_ARCHIVE</option>
+                            <option value="CONFIG_CHANGE">CONFIG_CHANGE</option>
+                            <option value="CONTENT_FILTER">CONTENT_FILTER</option>
+                            <option value="MESSAGE_ROUTED">MESSAGE_ROUTED</option>
+                        </select>
+                        <button class="btn btn-sm btn-accent" onclick="adminTab.loadAuditLog(0)">Filter</button>
+                    </div>
+                </div>
+                <div id="audit-log" class="audit-table-wrap">
+                    <div class="loading">Loading audit log...</div>
+                </div>
+                <div id="audit-pagination" class="pagination"></div>
+            </section>
+        </div>
+
+        <!-- Chat Tab -->
+        <div id="tab-chat" class="tab-panel">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <select id="chat-agent-select" class="select">
+                        <option value="default">default</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline" onclick="chatTab.clearHistory()">New Chat</button>
+                </div>
+                <div id="chat-messages" class="chat-messages"></div>
+                <div class="chat-input-area">
+                    <textarea id="chat-input" class="chat-input" placeholder="Type a message... (Enter to send, Shift+Enter for newline)" rows="2"></textarea>
+                    <button id="chat-send-btn" class="btn btn-accent" onclick="chatTab.sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Skills Tab -->
+        <div id="tab-skills" class="tab-panel">
+            <section class="section">
+                <div class="section-header">
+                    <h2>Registered Tools</h2>
+                </div>
+                <div id="skills-grid" class="card-grid">
+                    <div class="loading">Loading skills...</div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Agent Modal -->
+    <div id="agent-modal" class="modal-overlay" style="display:none">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Edit Agent</h3>
+                <button class="modal-close" onclick="adminTab.closeModal()">&times;</button>
+            </div>
+            <form id="agent-form" onsubmit="return adminTab.saveAgent(event)">
+                <div class="form-group">
+                    <label for="form-agentId">Agent ID</label>
+                    <input type="text" id="form-agentId" class="input" required pattern="[a-zA-Z0-9._-]+" title="Letters, numbers, dots, hyphens, underscores">
+                </div>
+                <div class="form-group">
+                    <label for="form-displayName">Display Name</label>
+                    <input type="text" id="form-displayName" class="input">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="form-model">Model</label>
+                        <input type="text" id="form-model" class="input" placeholder="e.g. claude-sonnet-4-20250514">
+                    </div>
+                    <div class="form-group">
+                        <label for="form-trustLevel">Trust Level</label>
+                        <select id="form-trustLevel" class="select">
+                            <option value="RESTRICTED">RESTRICTED</option>
+                            <option value="STANDARD" selected>STANDARD</option>
+                            <option value="ELEVATED">ELEVATED</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="form-systemPrompt">System Prompt</label>
+                    <textarea id="form-systemPrompt" class="input textarea" rows="4"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="form-allowedTools">Allowed Tools <span class="hint">(comma-separated)</span></label>
+                        <input type="text" id="form-allowedTools" class="input" placeholder="Leave empty for all">
+                    </div>
+                    <div class="form-group">
+                        <label for="form-deniedTools">Denied Tools <span class="hint">(comma-separated)</span></label>
+                        <input type="text" id="form-deniedTools" class="input">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="form-maxTokens">Max Tokens/Request</label>
+                        <input type="number" id="form-maxTokens" class="input" value="4096" min="256" max="200000">
+                    </div>
+                    <div class="form-group">
+                        <label for="form-maxToolCalls">Max Tool Calls/Request</label>
+                        <input type="number" id="form-maxToolCalls" class="input" value="10" min="1" max="100">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline" onclick="adminTab.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-accent">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/admin/js/dashboard.js"></script>
+    <script src="/admin/js/admin-tab.js"></script>
+    <script src="/admin/js/chat-tab.js"></script>
+    <script src="/admin/js/skills-tab.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadUserInfo();
+            initTabs();
+            adminTab.init();
+        });
+    </script>
+</body>
+</html>

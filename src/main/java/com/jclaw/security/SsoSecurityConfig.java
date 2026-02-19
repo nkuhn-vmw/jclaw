@@ -1,5 +1,9 @@
 package com.jclaw.security;
 
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -11,6 +15,11 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.web.filter.OncePerRequestFilter;
+import java.io.IOException;
 
 @Configuration
 @EnableWebSecurity
@@ -83,6 +92,7 @@ public class SsoSecurityConfig {
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/admin/css/**", "/admin/js/**").permitAll()
                         .requestMatchers("/admin/**").hasAuthority("SCOPE_jclaw.admin")
                         .requestMatchers("/operator/**").hasAnyAuthority(
                                 "SCOPE_jclaw.admin", "SCOPE_jclaw.operator")
@@ -90,10 +100,33 @@ public class SsoSecurityConfig {
                 )
                 .addFilterAfter(auditLogFilter, AuthorizationFilter.class)
                 .addFilterAfter(rateLimitFilter, AuditLogFilter.class)
+                .addFilterAfter(new CsrfCookieFilter(), UsernamePasswordAuthenticationFilter.class)
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 )
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                )
                 .build();
+    }
+
+    /**
+     * Forces the deferred CSRF token to be loaded on every request so the XSRF-TOKEN
+     * cookie is always present for JavaScript to read. Spring Security 6 defers token
+     * generation by default, so without this filter the cookie won't appear until a
+     * form-based POST triggers it.
+     */
+    private static class CsrfCookieFilter extends OncePerRequestFilter {
+        @Override
+        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                        FilterChain filterChain) throws ServletException, IOException {
+            CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+            if (csrfToken != null) {
+                csrfToken.getToken(); // Force token generation
+            }
+            filterChain.doFilter(request, response);
+        }
     }
 
 }

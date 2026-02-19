@@ -179,6 +179,10 @@ public class SessionManager {
         return sessionRepository.findByAgentIdAndStatus(agentId, SessionStatus.ACTIVE);
     }
 
+    public List<Session> getAllActiveSessions() {
+        return sessionRepository.findByStatus(SessionStatus.ACTIVE);
+    }
+
     @Transactional
     public void archiveSession(UUID sessionId) {
         sessionRepository.findById(sessionId).ifPresent(session -> {
