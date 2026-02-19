@@ -11,6 +11,14 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import com.jclaw.config.JclawProperties;
+import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
+import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -20,6 +28,9 @@ import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Configuration
 @EnableWebSecurity
@@ -30,14 +41,17 @@ public class SsoSecurityConfig {
     private final RateLimitFilter rateLimitFilter;
     private final ChannelWebhookAuthFilter channelWebhookAuthFilter;
     private final JwtAuthenticationConverter jwtConverter;
+    private final JclawProperties properties;
 
     public SsoSecurityConfig(AuditLogFilter auditLogFilter, RateLimitFilter rateLimitFilter,
                              ChannelWebhookAuthFilter channelWebhookAuthFilter,
-                             JwtAuthenticationConverter jwtConverter) {
+                             JwtAuthenticationConverter jwtConverter,
+                             JclawProperties properties) {
         this.auditLogFilter = auditLogFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.channelWebhookAuthFilter = channelWebhookAuthFilter;
         this.jwtConverter = jwtConverter;
+        this.properties = properties;
     }
 
     /**
@@ -87,6 +101,9 @@ public class SsoSecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .defaultSuccessUrl("/admin/dashboard")
                         .failureUrl("/login?error=true")
+                        .userInfoEndpoint(userInfo -> userInfo
+                                .userService(scopeMappingOAuth2UserService())
+                        )
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))
@@ -109,6 +126,37 @@ public class SsoSecurityConfig {
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                 )
                 .build();
+    }
+
+    /**
+     * Custom OAuth2 user service that grants SCOPE_jclaw.* authorities based on the
+     * jclaw.dashboard.admin-users property. UAA's P-Identity SSO plan only grants
+     * the "openid" scope via authorization_code flow and does not return an id_token,
+     * so Spring Security uses the plain OAuth2 path (not OIDC). This service maps
+     * SSO usernames to the authorities the rest of the app expects.
+     */
+    private OAuth2UserService<OAuth2UserRequest, OAuth2User> scopeMappingOAuth2UserService() {
+        DefaultOAuth2UserService delegate = new DefaultOAuth2UserService();
+        return userRequest -> {
+            OAuth2User oauth2User = delegate.loadUser(userRequest);
+            Set<GrantedAuthority> authorities = new HashSet<>(oauth2User.getAuthorities());
+
+            // Grant jclaw authorities based on configured admin users list
+            String userName = (String) oauth2User.getAttributes().get("user_name");
+            List<String> adminUsers = properties.getDashboard().getAdminUserList();
+            if (userName != null && adminUsers.contains(userName)) {
+                authorities.add(new SimpleGrantedAuthority("SCOPE_jclaw.admin"));
+                authorities.add(new SimpleGrantedAuthority("SCOPE_jclaw.operator"));
+                authorities.add(new SimpleGrantedAuthority("SCOPE_jclaw.user"));
+            }
+
+            // Preserve the original name attribute key
+            String nameAttr = "sub";
+            if (oauth2User.getAttributes().containsKey("user_name")) {
+                nameAttr = "user_name";
+            }
+            return new DefaultOAuth2User(authorities, oauth2User.getAttributes(), nameAttr);
+        };
     }
 
     /**

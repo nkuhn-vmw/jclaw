@@ -13,6 +13,7 @@ public class JclawProperties {
     private SessionProperties session = new SessionProperties();
     private SecurityProperties security = new SecurityProperties();
     private GenAiProperties genai = new GenAiProperties();
+    private DashboardProperties dashboard = new DashboardProperties();
     private List<AgentProperties> agents = new ArrayList<>();
 
     public SessionProperties getSession() { return session; }
@@ -23,6 +24,9 @@ public class JclawProperties {
 
     public GenAiProperties getGenai() { return genai; }
     public void setGenai(GenAiProperties genai) { this.genai = genai; }
+
+    public DashboardProperties getDashboard() { return dashboard; }
+    public void setDashboard(DashboardProperties dashboard) { this.dashboard = dashboard; }
 
     public List<AgentProperties> getAgents() { return agents; }
     public void setAgents(List<AgentProperties> agents) { this.agents = agents; }
@@ -119,6 +123,19 @@ public class JclawProperties {
         public void setApiKey(String apiKey) { this.apiKey = apiKey; }
         public String getModel() { return model; }
         public void setModel(String model) { this.model = model; }
+    }
+
+    public static class DashboardProperties {
+        /** Comma-separated list of SSO usernames granted jclaw.admin on the dashboard. */
+        private String adminUsers = "";
+
+        public String getAdminUsers() { return adminUsers; }
+        public void setAdminUsers(String adminUsers) { this.adminUsers = adminUsers; }
+
+        public List<String> getAdminUserList() {
+            if (adminUsers == null || adminUsers.isBlank()) return List.of();
+            return List.of(adminUsers.split("\\s*,\\s*"));
+        }
     }
 
     public static class AgentProperties {

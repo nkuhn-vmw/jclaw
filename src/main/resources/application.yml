@@ -55,4 +55,6 @@ jclaw:
         - "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
     data-residency:
       region: ${CF_REGION:us}
+  dashboard:
+    admin-users: ${JCLAW_DASHBOARD_ADMIN_USERS:}
   agents: []
