@@ -4,6 +4,7 @@ import com.jclaw.agent.AgentConfig;
 import com.jclaw.agent.AgentConfigService;
 import com.jclaw.agent.AgentContext;
 import com.jclaw.agent.AgentRuntime;
+import com.jclaw.agent.ModelRouter;
 import com.jclaw.audit.AuditEvent;
 import com.jclaw.audit.AuditService;
 import com.jclaw.channel.InboundMessage;
@@ -36,19 +37,22 @@ public class DashboardApiController {
     private final SessionManager sessionManager;
     private final AuditService auditService;
     private final ToolRegistry toolRegistry;
+    private final ModelRouter modelRouter;
 
     public DashboardApiController(AgentRuntime agentRuntime,
                                   AgentConfigService agentConfigService,
                                   IdentityMappingService identityMappingService,
                                   SessionManager sessionManager,
                                   AuditService auditService,
-                                  ToolRegistry toolRegistry) {
+                                  ToolRegistry toolRegistry,
+                                  ModelRouter modelRouter) {
         this.agentRuntime = agentRuntime;
         this.agentConfigService = agentConfigService;
         this.identityMappingService = identityMappingService;
         this.sessionManager = sessionManager;
         this.auditService = auditService;
         this.toolRegistry = toolRegistry;
+        this.modelRouter = modelRouter;
     }
 
     // --- User Info ---
@@ -59,6 +63,13 @@ public class DashboardApiController {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.toList());
         return new UserInfoResponse(auth.getName(), authorities);
+    }
+
+    // --- Models ---
+
+    @GetMapping("/models")
+    public List<String> getModels() {
+        return modelRouter.getAvailableModelNames();
     }
 
     // --- Chat ---
@@ -73,7 +84,10 @@ public class DashboardApiController {
 
         AgentContext context = new AgentContext(agentId, principal, "dashboard");
 
-        var response = agentRuntime.callMessage(context, message).block();
+        String modelOverride = (request.modelOverride() != null && !request.modelOverride().isBlank())
+                ? request.modelOverride() : null;
+
+        var response = agentRuntime.callMessage(context, message, modelOverride).block();
         return new ChatResponse(response != null ? response.content() : "", agentId);
     }
 
@@ -172,7 +186,7 @@ public class DashboardApiController {
 
     record UserInfoResponse(String name, List<String> authorities) {}
 
-    record ChatRequest(String message, String agentId, String conversationId) {}
+    record ChatRequest(String message, String agentId, String conversationId, String modelOverride) {}
 
     record ChatResponse(String response, String agentId) {}
 

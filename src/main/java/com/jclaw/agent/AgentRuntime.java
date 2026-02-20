@@ -69,6 +69,14 @@ public class AgentRuntime {
      */
     @Observed(name = "jclaw.agent.call", contextualName = "agent-call-message")
     public Mono<AgentResponse> callMessage(AgentContext context, InboundMessage message) {
+        return callMessage(context, message, null);
+    }
+
+    /**
+     * Non-streaming message processing with optional model override.
+     * When modelOverride is non-null, it overrides the agent's configured model for this request only.
+     */
+    public Mono<AgentResponse> callMessage(AgentContext context, InboundMessage message, String modelOverride) {
         return Mono.fromCallable(() -> {
             MDC.put("agentId", context.agentId());
             MDC.put("principal", context.principal());
@@ -88,14 +96,24 @@ public class AgentRuntime {
             Prompt prompt = promptService.buildPrompt(context, session, filtered);
             List<ToolCallback> tools = toolRegistry.resolveTools(context);
 
-            return new LlmCallContext(session, prompt, tools, config);
+            return new LlmCallContext(session, prompt, tools, config, modelOverride);
         })
         .subscribeOn(Schedulers.boundedElastic())
         .flatMap(ctx -> Mono.fromCallable(() -> {
             Timer.Sample sample = metrics.startLlmTimer();
 
-            ChatModel resolvedModel = modelRouter.resolveModel(context.agentId(), ctx.config());
-            String modelName = ctx.config().getModel() != null ? ctx.config().getModel() : "default";
+            // Use effectiveModel() to respect modelOverride if provided
+            String effectiveModel = ctx.effectiveModel();
+            AgentConfig resolveConfig = ctx.config();
+            if (effectiveModel != null && !effectiveModel.equals(resolveConfig.getModel())) {
+                // Create a transient config copy with the overridden model for resolution
+                AgentConfig overrideConfig = new AgentConfig();
+                overrideConfig.setModel(effectiveModel);
+                resolveConfig = overrideConfig;
+            }
+
+            ChatModel resolvedModel = modelRouter.resolveModel(context.agentId(), resolveConfig);
+            String modelName = effectiveModel != null ? effectiveModel : "default";
             metrics.recordLlmRequest(modelName, context.agentId());
 
             ChatClient chatClient = (resolvedModel != modelRouter.getDefaultModel())
@@ -104,8 +122,8 @@ public class AgentRuntime {
 
             OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
                     .maxTokens(ctx.config().getMaxTokensPerRequest());
-            if (ctx.config().getModel() != null) {
-                optionsBuilder.model(ctx.config().getModel());
+            if (effectiveModel != null) {
+                optionsBuilder.model(effectiveModel);
             }
             ChatClient.ChatClientRequestSpec spec = chatClient.prompt(ctx.prompt())
                     .options(optionsBuilder.build());
@@ -377,6 +395,16 @@ public class AgentRuntime {
             Session session,
             Prompt prompt,
             List<ToolCallback> tools,
-            AgentConfig config
-    ) {}
+            AgentConfig config,
+            String modelOverride
+    ) {
+        LlmCallContext(Session session, Prompt prompt, List<ToolCallback> tools, AgentConfig config) {
+            this(session, prompt, tools, config, null);
+        }
+
+        String effectiveModel() {
+            if (modelOverride != null && !modelOverride.isBlank()) return modelOverride;
+            return config.getModel();
+        }
+    }
 }

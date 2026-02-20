@@ -101,6 +101,9 @@
                     <select id="chat-agent-select" class="select">
                         <option value="default">default</option>
                     </select>
+                    <select id="chat-model-select" class="select">
+                        <option value="">(agent default)</option>
+                    </select>
                     <button class="btn btn-sm btn-outline" onclick="chatTab.clearHistory()">New Chat</button>
                 </div>
                 <div id="chat-messages" class="chat-messages"></div>
@@ -143,7 +146,8 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="form-model">Model</label>
-                        <input type="text" id="form-model" class="input" placeholder="e.g. claude-sonnet-4-20250514">
+                        <input type="text" id="form-model" class="input" placeholder="e.g. claude-sonnet-4-20250514" list="available-models">
+                        <datalist id="available-models"></datalist>
                     </div>
                     <div class="form-group">
                         <label for="form-trustLevel">Trust Level</label>

@@ -10,6 +10,7 @@ const chatTab = {
         this._initialized = true;
         this._conversationId = crypto.randomUUID();
         this._setupKeyHandler();
+        this.loadModels();
     },
 
     _setupKeyHandler() {
@@ -22,6 +23,26 @@ const chatTab = {
         });
     },
 
+    async loadModels() {
+        try {
+            const models = await fetchApi('/admin/api/models');
+            const select = document.getElementById('chat-model-select');
+            const datalist = document.getElementById('available-models');
+
+            if (models && models.length > 0) {
+                select.innerHTML = '<option value="">(agent default)</option>' +
+                    models.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+
+                if (datalist) {
+                    datalist.innerHTML = models.map(m =>
+                        `<option value="${escapeHtml(m)}">`).join('');
+                }
+            }
+        } catch (e) {
+            // Model loading is non-critical; agent default will be used
+        }
+    },
+
     async sendMessage() {
         if (this._sending) return;
 
@@ -30,6 +51,7 @@ const chatTab = {
         if (!message) return;
 
         const agentId = document.getElementById('chat-agent-select').value;
+        const modelOverride = document.getElementById('chat-model-select').value || null;
 
         this.addMessage('user', message);
         input.value = '';
@@ -40,13 +62,18 @@ const chatTab = {
         sendBtn.textContent = '...';
 
         try {
+            const body = {
+                message: message,
+                agentId: agentId,
+                conversationId: this._conversationId
+            };
+            if (modelOverride) {
+                body.modelOverride = modelOverride;
+            }
+
             const data = await fetchApi('/admin/api/chat/send', {
                 method: 'POST',
-                body: JSON.stringify({
-                    message: message,
-                    agentId: agentId,
-                    conversationId: this._conversationId
-                })
+                body: JSON.stringify(body)
             });
             this.addMessage('assistant', data.response || '(empty response)');
         } catch (e) {

@@ -298,6 +298,52 @@ curl -X POST https://jclaw.example.com/api/admin/sessions/550e8400-.../archive \
   -H "Authorization: Bearer $JWT_TOKEN"
 ```
 
+## Management Dashboard
+
+jclaw ships with a web-based management dashboard for administering agents, chatting with models, viewing tools, and monitoring sessions and audit events.
+
+### Access
+
+- **URL**: `/admin/dashboard`
+- **Auth**: Requires the `jclaw.admin` scope (SSO login via OAuth2)
+- **Login flow**: Unauthenticated users are redirected to `/oauth2/authorization/sso`
+
+### Configuration
+
+Grant admin access by setting `jclaw.dashboard.admin-users` (comma-separated SSO usernames):
+
+```bash
+JCLAW_DASHBOARD_ADMIN_USERS=alice@acme.com,bob@acme.com
+```
+
+### Dashboard Tabs
+
+| Tab | Features |
+|-----|----------|
+| **Admin** | Agent CRUD, pending identity mapping approval, active session management, filterable audit log with pagination |
+| **Chat** | Send messages to any agent with per-request model selector, conversation history, new chat |
+| **Skills** | View all registered tools with risk level badges and approval requirements |
+
+### Dashboard API Endpoints
+
+Session-authenticated endpoints used by the dashboard UI (separate from the JWT-based Admin API):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/api/userinfo` | Current user info and authorities |
+| `GET` | `/admin/api/models` | List available model names |
+| `POST` | `/admin/api/chat/send` | Send chat message (supports `modelOverride`) |
+| `GET` | `/admin/api/agents` | List all agents |
+| `GET` | `/admin/api/agents/{id}` | Get agent config |
+| `PUT` | `/admin/api/agents/{id}` | Create/update agent |
+| `DELETE` | `/admin/api/agents/{id}` | Delete agent |
+| `GET` | `/admin/api/skills` | List registered tools |
+| `GET` | `/admin/api/identity-mappings/pending` | Pending identity mappings |
+| `POST` | `/admin/api/identity-mappings/{id}/approve` | Approve identity mapping |
+| `GET` | `/admin/api/sessions` | List active sessions (optional `?agentId=` filter) |
+| `POST` | `/admin/api/sessions/{id}/archive` | Archive a session |
+| `GET` | `/admin/api/audit` | Query audit log (supports `?principal=`, `?eventType=`, pagination) |
+
 ## Configuration
 
 ### Agent Configuration (application.yml)
@@ -465,6 +511,7 @@ src/main/java/com/jclaw/
   channel/        # ChannelRouter, adapters (Slack, Teams, Discord, Google Chat, WebChat, REST)
   config/         # JclawProperties, SecretsConfig, GenAiConfig, Redis, Scheduling
   content/        # ContentFilterChain, EgressGuard, PatternDetector, InputSanitizer
+  controller/     # DashboardApiController, AdminApiController (management dashboard)
   observability/  # JclawMetrics, CorrelationIdFilter, PiiRedactionConverter, HealthIndicators
   security/       # SsoSecurityConfig, ChannelWebhookAuthFilter, IdentityMappingService, RateLimiting
   session/        # SessionManager, CompactionService, Session entities, Flyway migrations

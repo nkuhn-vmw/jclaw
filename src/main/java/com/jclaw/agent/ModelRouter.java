@@ -8,6 +8,8 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.context.ApplicationContext;
 import jakarta.annotation.PostConstruct;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -102,6 +104,10 @@ public class ModelRouter {
 
     void registerModel(String modelId, ChatModel model) {
         modelRegistry.put(modelId, model);
+    }
+
+    public List<String> getAvailableModelNames() {
+        return new ArrayList<>(modelRegistry.keySet());
     }
 
     public ChatModel getDefaultModel() {
