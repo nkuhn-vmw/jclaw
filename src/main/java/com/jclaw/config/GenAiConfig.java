@@ -23,6 +23,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.*;
 
 /**
@@ -230,18 +231,25 @@ public class GenAiConfig {
     }
 
     /**
-     * Register an OpenAI-compatible ChatModel.
+     * Register an OpenAI-compatible ChatModel with extended timeouts for large model inference.
      */
     private void registerOpenAiModel(String baseUrl, String apiKey, String modelName, String serviceName) {
         try {
-            OpenAiApi api = new OpenAiApi(baseUrl, apiKey);
+            var httpClient = reactor.netty.http.client.HttpClient.create()
+                    .responseTimeout(Duration.ofSeconds(120));
+            var requestFactory = new org.springframework.http.client.ReactorClientHttpRequestFactory(httpClient);
+            var restClientBuilder = RestClient.builder().requestFactory(requestFactory);
+            var webClientBuilder = org.springframework.web.reactive.function.client.WebClient.builder()
+                    .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient));
+
+            OpenAiApi api = new OpenAiApi(baseUrl, apiKey, restClientBuilder, webClientBuilder);
             ChatModel chatModel = new OpenAiChatModel(api, OpenAiChatOptions.builder()
                     .model(modelName)
                     .maxTokens(4096)
                     .temperature(0.7)
                     .build());
             cloudModels.put(modelName, chatModel);
-            log.info("Registered ChatModel: {} (service: {})", modelName, serviceName);
+            log.info("Registered ChatModel: {} (service: {}, timeout: 120s)", modelName, serviceName);
         } catch (Exception e) {
             log.warn("Failed to create ChatModel for {}: {}", modelName, e.getMessage());
         }
