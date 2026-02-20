@@ -10,6 +10,7 @@ applications:
     JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
     SPRING_PROFILES_ACTIVE: cloud
     JCLAW_ADMIN_ALLOWED_ORIGINS: https://jclaw.apps.tas-ndc.kuhn-labs.com
+    JCLAW_DASHBOARD_ADMIN_USERS: runner1
   services:
     - jclaw-genai
     - jclaw-sso

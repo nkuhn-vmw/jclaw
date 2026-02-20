@@ -50,7 +50,7 @@ const chatTab = {
         const message = input.value.trim();
         if (!message) return;
 
-        const agentId = document.getElementById('chat-agent-select').value;
+        const agentId = 'default';
         const modelOverride = document.getElementById('chat-model-select').value || null;
 
         this.addMessage('user', message);

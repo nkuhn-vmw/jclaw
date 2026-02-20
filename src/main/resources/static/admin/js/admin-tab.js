@@ -54,14 +54,6 @@ const adminTab = {
                 agents.map(a => `<option value="${escapeHtml(a.agentId)}">${escapeHtml(a.agentId)}</option>`).join('');
             filter.value = val;
         }
-        // Chat agent selector
-        const chatSelect = document.getElementById('chat-agent-select');
-        if (chatSelect) {
-            chatSelect.innerHTML = '<option value="default">default</option>' +
-                agents.filter(a => a.agentId !== 'default')
-                    .map(a => `<option value="${escapeHtml(a.agentId)}">${escapeHtml(a.agentId)}</option>`)
-                    .join('');
-        }
     },
 
     createAgent() {
