@@ -11,6 +11,7 @@ applications:
     SPRING_PROFILES_ACTIVE: cloud
     JCLAW_ADMIN_ALLOWED_ORIGINS: https://jclaw.apps.tas-ndc.kuhn-labs.com
     JCLAW_DASHBOARD_ADMIN_USERS: runner1
+    JCLAW_SEARCH_PROVIDER: brave
   services:
     - jclaw-genai
     - jclaw-sso
